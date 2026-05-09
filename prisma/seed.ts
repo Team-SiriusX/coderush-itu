@@ -17,10 +17,6 @@ async function ensureUser(params: {
     const result = await auth.api.signUpEmail({
       body: { email, password, name },
     });
-
-    if (result?.error) {
-      throw new Error(result.error.message ?? `Failed to create user ${email}`);
-    }
   }
 
   const createdOrExisting = await db.user.findUnique({ where: { email } });
