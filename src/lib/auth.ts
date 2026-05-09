@@ -1,4 +1,4 @@
-import { PrismaClient } from '@/generated/prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
@@ -17,13 +17,6 @@ export const auth = betterAuth({
     cookieCache: {
       enabled: true,
       strategy: 'jwt',
-    },
-  },
-  user: {
-    fields: {
-      name: 'fullName',
-      emailVerified: 'isActive',
-      role: 'role',
     },
   },
   emailAndPassword: { enabled: true },
