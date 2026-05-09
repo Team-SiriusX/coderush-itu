@@ -36,6 +36,7 @@ export type Port = {
 export type AlertType =
   | 'GEOFENCE_BREACH'
   | 'PROXIMITY_WARNING'
+  | 'COLLISION_RISK'
   | 'DISTRESS_SIGNAL'
   | 'LOW_FUEL'
   | 'OUT_OF_FUEL'

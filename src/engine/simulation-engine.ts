@@ -6,6 +6,8 @@ import { loadInitialFleet } from './fleet-loader'
 import { broadcastFleet, broadcastAlerts } from './realtime-broadcaster'
 import { routingEngine } from './routing/routing-engine'
 import { zoneEngine } from './routing/zone-engine'
+import { weatherEngine } from '@/systems/weather/weather-engine'
+import { generatePredictiveAlerts } from '@/systems/prediction/predictive-alerts'
 import db from '@/lib/db'
 
 /** Default tick interval in milliseconds */
@@ -60,6 +62,8 @@ class SimulationEngine {
       this.forceRecomputeRoutes = true // initial compute
     }).catch(e => console.error('[engine] Failed to load zones', e))
 
+    weatherEngine.init()
+
     console.log(`[engine] Starting simulation — ${this.ships.size} ships, tick ${tickIntervalMs}ms`)
 
     // Stable interval — NOT recursive setTimeout
@@ -75,6 +79,7 @@ class SimulationEngine {
       clearInterval(this.intervalId)
       this.intervalId = null
     }
+    weatherEngine.stop()
     this.running = false
     console.log(`[engine] Stopped after ${this.tickCount} ticks`)
   }
@@ -170,12 +175,16 @@ class SimulationEngine {
     // 1. Physics — advance position, heading, route
     const movement = computeMovement(currentShip, this.tickMs)
 
+    // Query weather at new position
+    const weatherSeverity = weatherEngine.getSeverityAt(movement.newPosition.lat, movement.newPosition.lng)
+    const weatherPenalty = weatherSeverity !== 'LOW'
+
     // 2. Fuel — burn based on distance travelled
     const fuel = computeFuel(
       ship.fuelRemaining,
       ship.speed,
       movement.distanceTravelledNm,
-      ship.weatherPenalty,
+      weatherSeverity,
     )
 
     // 3. Status — derive new status from fuel & arrival
@@ -197,13 +206,17 @@ class SimulationEngine {
       fuelRemaining:      fuel.remaining,
       status,
       route:              movement.updatedRoute,
+      weatherPenalty,
+      weatherSeverity,
       arrivedAt:          movement.arrived && !currentShip.arrivedAt ? Date.now() : currentShip.arrivedAt,
       lowFuelAlertSent,
       outOfFuelAlertSent,
       lastUpdated:        Date.now(),
     }
 
-    return { ship: updatedShip, alerts: [...alerts, ...pendingAlerts] }
+    const predictiveAlerts = generatePredictiveAlerts(updatedShip)
+
+    return { ship: updatedShip, alerts: [...alerts, ...pendingAlerts, ...predictiveAlerts] }
   }
 
   // ── External mutation (called by API route handlers) ─────────────────────

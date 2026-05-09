@@ -8,6 +8,9 @@ import 'leaflet-draw'
 import { useFleetStore } from '@/stores/fleet-store'
 import type { ShipState } from '@/types/fleet'
 import { getPusherClient } from '@/lib/pusher-client'
+import { useInterpolationStore } from '@/systems/interpolation/interpolation-store'
+import { usePlaybackStore } from '@/systems/playback/playback-store'
+import { findFrameAt } from '@/systems/playback/playback-engine'
 
 // Fix Leaflet default marker icon paths (Next.js build issue)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,10 +59,32 @@ export default function FleetMap() {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<L.Map | null>(null)
   const markersRef = useRef<Map<string, L.Marker>>(new Map())
+  const routesRef = useRef<Map<string, L.Polyline>>(new Map())
+  const indicatorsRef = useRef<Map<string, L.CircleMarker>>(new Map())
   const zonesLayerRef = useRef<L.FeatureGroup | null>(null)
-  const ships = useFleetStore(s => s.ships)
+  const weatherLayerRef = useRef<L.LayerGroup | null>(null)
+  const [showWeather, setShowWeather] = useState(false)
+  const rawShips = useFleetStore(s => s.ships)
   const selectedId = useFleetStore(s => s.selectedShipId)
   const setSelected = useFleetStore(s => s.setSelectedShip)
+  const renderShips = useInterpolationStore(s => s.renderShips)
+  const playbackMode = usePlaybackStore(s => s.isPlaybackMode)
+  const playbackFrames = usePlaybackStore(s => s.frames)
+  const playbackTs = usePlaybackStore(s => s.cursorTimestamp)
+
+  const ships: ShipState[] = playbackMode
+    ? findFrameAt(playbackFrames, playbackTs)?.ships ?? []
+    : rawShips.map((ship) => {
+        const render = renderShips[ship.id]
+        return render
+          ? {
+              ...ship,
+              position: render.position,
+              heading: render.heading,
+              speed: render.speed,
+            }
+          : ship
+      })
 
   useEffect(() => {
     setIsMounted(true)
@@ -156,6 +181,43 @@ export default function FleetMap() {
         })
       })
 
+    // Fetch Weather
+    weatherLayerRef.current = new L.LayerGroup()
+    fetch('/api/weather')
+      .then(r => r.json())
+      .then(data => {
+        if (!data || !data.cells) return
+        data.cells.forEach((cell: any) => {
+          let color = 'transparent'
+          if (cell.severity === 'EXTREME') color = '#dc2626'
+          else if (cell.severity === 'SEVERE') color = '#ea580c'
+          else if (cell.severity === 'MODERATE') color = '#eab308'
+          
+          if (color !== 'transparent') {
+            const bounds: L.LatLngBoundsExpression = [
+              [cell.lat - 0.5, cell.lng - 0.5],
+              [cell.lat + 0.5, cell.lng + 0.5]
+            ]
+            const rect = L.rectangle(bounds, {
+              color,
+              weight: 0,
+              fillColor: color,
+              fillOpacity: 0.15
+            })
+            rect.bindTooltip(`
+              <div style="font-family: var(--font-mono); font-size:10px;">
+                <strong style="color:${color}">WEATHER: ${cell.severity}</strong><br/>
+                Wind: ${cell.windSpeed.toFixed(1)} kts<br/>
+                Waves: ${cell.waveHeight.toFixed(1)} m<br/>
+                Storm: ${cell.stormScore} / 100
+              </div>
+            `)
+            rect.addTo(weatherLayerRef.current!)
+          }
+        })
+      })
+      .catch(console.error)
+
     // Setup Pusher for zones updates
     const pusherClient = getPusherClient()
     const channel = pusherClient.subscribe('zones')
@@ -180,6 +242,14 @@ export default function FleetMap() {
         marker.remove()
       }
       markersRef.current.clear()
+      for (const route of routesRef.current.values()) {
+        route.remove()
+      }
+      routesRef.current.clear()
+      for (const c of indicatorsRef.current.values()) {
+        c.remove()
+      }
+      indicatorsRef.current.clear()
 
       const currentContainer = currentMap.getContainer() as HTMLElement & { _leaflet_id?: number }
       currentMap.remove()
@@ -189,6 +259,15 @@ export default function FleetMap() {
       mapRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    if (!mapRef.current || !weatherLayerRef.current) return
+    if (showWeather) {
+      mapRef.current.addLayer(weatherLayerRef.current)
+    } else {
+      mapRef.current.removeLayer(weatherLayerRef.current)
+    }
+  }, [showWeather])
 
   useEffect(() => {
     const map = mapRef.current
@@ -228,6 +307,63 @@ export default function FleetMap() {
         marker.addTo(map)
         markersRef.current.set(ship.id, marker)
       }
+
+      const routeLatLngs: L.LatLngExpression[] = [
+        [ship.position.lat, ship.position.lng],
+        ...ship.route.map(p => [p.lat, p.lng] as L.LatLngExpression),
+      ]
+      const existingRoute = routesRef.current.get(ship.id)
+      const routeColor = ship.status === 'rerouting' ? '#facc15' : '#22d3ee'
+      if (existingRoute) {
+        existingRoute.setLatLngs(routeLatLngs)
+        existingRoute.setStyle({ color: routeColor, dashArray: ship.status === 'rerouting' ? '6 6' : '2 6' })
+      } else {
+        const polyline = L.polyline(routeLatLngs, {
+          color: routeColor,
+          weight: 1.5,
+          opacity: 0.6,
+          dashArray: ship.status === 'rerouting' ? '6 6' : '2 6',
+        }).addTo(map)
+        routesRef.current.set(ship.id, polyline)
+      }
+
+      const existingIndicator = indicatorsRef.current.get(ship.id)
+      const needsIndicator = ship.status === 'distressed' || ship.status === 'stranded' || ship.status === 'insufficient_fuel'
+      if (needsIndicator) {
+        const color =
+          ship.status === 'stranded' ? '#dc2626' :
+          ship.status === 'distressed' ? '#f97316' :
+          '#fb923c'
+        if (existingIndicator) {
+          existingIndicator.setLatLng([ship.position.lat, ship.position.lng])
+          existingIndicator.setStyle({ color, fillColor: color, radius: ship.status === 'stranded' ? 10 : 7 })
+        } else {
+          const c = L.circleMarker([ship.position.lat, ship.position.lng], {
+            radius: ship.status === 'stranded' ? 10 : 7,
+            color,
+            fillColor: color,
+            fillOpacity: 0.15,
+            weight: 2,
+          }).addTo(map)
+          indicatorsRef.current.set(ship.id, c)
+        }
+      } else if (existingIndicator) {
+        existingIndicator.remove()
+        indicatorsRef.current.delete(ship.id)
+      }
+    }
+
+    for (const [id, r] of routesRef.current) {
+      if (!currentIds.has(id)) {
+        r.remove()
+        routesRef.current.delete(id)
+      }
+    }
+    for (const [id, c] of indicatorsRef.current) {
+      if (!currentIds.has(id)) {
+        c.remove()
+        indicatorsRef.current.delete(id)
+      }
     }
   }, [ships, selectedId, setSelected])
 
@@ -242,6 +378,14 @@ export default function FleetMap() {
   return (
     <div className="h-full w-full relative bg-slate-900">
       <div ref={containerRef} className="h-full w-full bg-slate-900" />
+      <button 
+        onClick={() => setShowWeather(!showWeather)}
+        className={`absolute bottom-6 left-6 z-[1000] px-3 py-1.5 rounded text-[11px] font-mono font-bold tracking-widest border transition-colors ${
+          showWeather ? 'bg-cyan-900/50 text-cyan-400 border-cyan-400' : 'bg-slate-900/80 text-slate-500 border-slate-700 hover:text-slate-300'
+        }`}
+      >
+        WEATHER OVERLAY: {showWeather ? 'ON' : 'OFF'}
+      </button>
     </div>
   )
 }

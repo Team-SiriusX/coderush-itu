@@ -18,13 +18,15 @@ function speedMultiplier(speedKnots: number): number {
   return 1 + excess * 0.05
 }
 
+import { WeatherSeverity } from '@/systems/weather/weather-types'
+
 /**
  * Compute fuel consumption for one tick.
  *
  * @param fuelRemaining  Current fuel in tons
  * @param speedKnots     Current speed in knots
  * @param distanceNm     Distance travelled this tick in nautical miles
- * @param weatherPenalty Weather multiplier active? (adds 30% burn)
+ * @param weatherSeverity Weather severity
  *
  * @returns FuelComputation with consumed, remaining, and depleted flag
  */
@@ -32,7 +34,7 @@ export function computeFuel(
   fuelRemaining:  number,
   speedKnots:     number,
   distanceNm:     number,
-  weatherPenalty: boolean,
+  weatherSeverity: WeatherSeverity,
 ): FuelComputation {
   // No movement → no burn
   if (distanceNm <= 0 || speedKnots <= 0) {
@@ -44,9 +46,14 @@ export function computeFuel(
     }
   }
 
+  let penalty = 1.0
+  if (weatherSeverity === 'MODERATE') penalty = 1.15
+  else if (weatherSeverity === 'SEVERE') penalty = 1.30
+  else if (weatherSeverity === 'EXTREME') penalty = 1.50
+
   const burnRate = BASE_BURN_RATE_T_PER_NM
     * speedMultiplier(speedKnots)
-    * (weatherPenalty ? 1.30 : 1.0)
+    * penalty
 
   const consumed  = burnRate * distanceNm
   const remaining = Math.max(0, fuelRemaining - consumed)
@@ -67,11 +74,16 @@ export function computeFuel(
 export function estimatedRangeNm(
   fuelRemaining:  number,
   speedKnots:     number,
-  weatherPenalty: boolean,
+  weatherSeverity: WeatherSeverity,
 ): number {
+  let penalty = 1.0
+  if (weatherSeverity === 'MODERATE') penalty = 1.15
+  else if (weatherSeverity === 'SEVERE') penalty = 1.30
+  else if (weatherSeverity === 'EXTREME') penalty = 1.50
+
   const burnRate = BASE_BURN_RATE_T_PER_NM
     * speedMultiplier(speedKnots)
-    * (weatherPenalty ? 1.30 : 1.0)
+    * penalty
 
   if (burnRate <= 0) return Infinity
   return fuelRemaining / burnRate

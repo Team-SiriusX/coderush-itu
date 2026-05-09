@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useFleetStore } from '@/stores/fleet-store'
 import type { ShipState } from '@/types/fleet'
+import * as turf from '@turf/turf'
 
 const PORTS: Record<string, string> = {
   'KWT-1': 'Kuwait City',
@@ -21,6 +22,18 @@ export default function ShipSidebar({ ship }: { ship: ShipState }) {
   const setSelected = useFleetStore(s => s.setSelectedShip)
   const fuelPct     = Math.min(100, Math.round((ship.fuelRemaining / 8500) * 100))
   const fuelColor   = fuelPct > 40 ? 'bg-primary shadow-[0_0_8px_#00ff66]' : fuelPct > 20 ? 'bg-yellow-400' : 'bg-red-500 shadow-[0_0_8px_#ef4444]'
+
+  // Calculate ETA
+  let routeDist = 0
+  if (ship.route && ship.route.length > 0) {
+    let current = ship.position
+    for (const wp of ship.route) {
+      routeDist += turf.distance([current.lng, current.lat], [wp.lng, wp.lat], { units: 'kilometers' }) / 1.852
+      current = wp
+    }
+  }
+  const hours = ship.speed > 0 ? routeDist / ship.speed : null
+  const etaDisplay = hours !== null ? `~${Math.round(hours)} HRS` : 'N/A (STOPPED)'
 
   return (
     <div className="flex flex-col h-full bg-card/40 font-sans">
@@ -59,8 +72,9 @@ export default function ShipSidebar({ ship }: { ship: ShipState }) {
         <Row label="CARGO_TYPE"  value={ship.cargo.toUpperCase()} />
         <Row label="VELOCITY"    value={`${ship.speed} KTS`} />
         <Row label="BEARING"     value={`${Math.round(ship.heading)}°`} />
+        <Row label="ETA"         value={ship.status === 'arrived' ? 'ARRIVED' : etaDisplay} />
         <Row label="COORDINATES" value={`${ship.position.lat.toFixed(4)}°N / ${ship.position.lng.toFixed(4)}°E`} />
-        <Row label="MET_COND"    value={ship.weatherPenalty ? '⚠ ADVERSE (+30% BURN)' : 'STABLE'} />
+        <Row label="MET_COND"    value={ship.weatherSeverity !== 'LOW' ? `⚠ ${ship.weatherSeverity} (+${ship.weatherSeverity === 'EXTREME' ? '50' : ship.weatherSeverity === 'SEVERE' ? '30' : '15'}% BURN)` : 'STABLE'} />
 
         {/* Fuel bar */}
         <div className="pt-2">

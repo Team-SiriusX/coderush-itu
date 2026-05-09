@@ -43,6 +43,7 @@ export function loadInitialFleet(): EngineShip[] {
       status:            'NORMAL' as const,
       route:             buildRoute(destinationPos),
       weatherPenalty:    ship.weatherPenalty,
+      weatherSeverity:   'LOW',
       arrivedAt:         null,
       lowFuelAlertSent:  false,
       outOfFuelAlertSent: false,

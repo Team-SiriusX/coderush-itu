@@ -25,6 +25,7 @@ function toBroadcastShip(ship: EngineShip, now: number): BroadcastShip {
     cargo:            ship.cargo,
     destinationPortId: ship.destinationPortId,
     weatherPenalty:   ship.weatherPenalty,
+    weatherSeverity:  ship.weatherSeverity,
     route:            routeWaypoints,
     lastUpdated:      ship.lastUpdated,
     serverTimestamp:  now,

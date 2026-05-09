@@ -34,6 +34,7 @@ export type EngineShip = {
   status:            EngineShipStatus
   route:             ShipRoute | null
   weatherPenalty:    boolean
+  weatherSeverity:   'LOW' | 'MODERATE' | 'SEVERE' | 'EXTREME'
   arrivedAt:         number | null   // ms timestamp when arrived
   lowFuelAlertSent:  boolean
   outOfFuelAlertSent: boolean
@@ -80,6 +81,7 @@ export type BroadcastShip = {
   cargo:            string
   destinationPortId: string
   weatherPenalty:   boolean
+  weatherSeverity:  'LOW' | 'MODERATE' | 'SEVERE' | 'EXTREME'
   route:            LatLng[]
   lastUpdated:      number
   serverTimestamp:  number

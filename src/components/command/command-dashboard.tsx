@@ -1,11 +1,18 @@
 'use client'
 
+import { useEffect, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { useFleetSync } from '@/hooks/use-fleet-sync'
 import { useFleetStore } from '@/stores/fleet-store'
 import AlertPanel from '@/components/command/alert-panel'
 import ShipSidebar from '@/components/command/ship-sidebar'
 import { GlobeCdn } from '@/components/ui/cobe-globe-cdn'
+import { useInterpolationStore } from '@/systems/interpolation/interpolation-store'
+import { usePlaybackStore } from '@/systems/playback/playback-store'
+import { findFrameAt } from '@/systems/playback/playback-engine'
+import { PlaybackRecorder } from '@/systems/playback/playback-recorder'
+import { ProximityEngine } from '@/systems/proximity/proximity-engine'
+import type { FleetRecommendation } from '@/systems/advisor/advisor-types'
 
 // Leaflet must be loaded client-side only (no SSR)
 const FleetMap = dynamic(() => import('@/components/command/fleet-map'), {
@@ -20,9 +27,121 @@ const FleetMap = dynamic(() => import('@/components/command/fleet-map'), {
 export default function CommandDashboard() {
   useFleetSync()  // subscribes to Pusher, syncs Zustand store
 
-  const ships        = useFleetStore(s => s.ships)
-  const alerts       = useFleetStore(s => s.alerts)
+  const liveShipsRaw = useFleetStore(s => s.ships)
+  const alerts = useFleetStore(s => s.alerts)
+  const zones = useFleetStore(s => s.zones)
+  const directives = useFleetStore(s => s.directives)
   const selectedShipId = useFleetStore(s => s.selectedShipId)
+  const setPlaybackFlag = useFleetStore(s => s.setPlayback)
+
+  const ingestServerShips = useInterpolationStore(s => s.ingestServerShips)
+  const tickRender = useInterpolationStore(s => s.tickRender)
+  const renderShips = useInterpolationStore(s => s.renderShips)
+
+  const playbackMode = usePlaybackStore(s => s.isPlaybackMode)
+  const playbackFrames = usePlaybackStore(s => s.frames)
+  const playbackCursor = usePlaybackStore(s => s.cursorTimestamp)
+  const setPlaybackFrames = usePlaybackStore(s => s.setFrames)
+  const recorderRef = useRef(new PlaybackRecorder())
+  const proximityRef = useRef(new ProximityEngine())
+
+  const [recommendations, setRecommendations] = useState<FleetRecommendation[]>([])
+
+  useEffect(() => {
+    const fetchRecs = async () => {
+      if (playbackMode) return
+      try {
+        const res = await fetch('/api/advisor/recommendations')
+        if (res.ok) {
+          const data = await res.json()
+          setRecommendations(data)
+        }
+      } catch (err) {}
+    }
+    fetchRecs()
+    const id = setInterval(fetchRecs, 5000)
+    return () => clearInterval(id)
+  }, [playbackMode])
+
+  useEffect(() => {
+    ingestServerShips(liveShipsRaw)
+  }, [liveShipsRaw, ingestServerShips])
+
+  useEffect(() => {
+    let raf = 0
+    const loop = (now: number) => {
+      tickRender(now)
+      raf = requestAnimationFrame(loop)
+    }
+    raf = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(raf)
+  }, [tickRender])
+
+  useEffect(() => {
+    void fetch('/api/playback')
+      .then((r) => r.json())
+      .then((frames) => {
+        const normalized = (frames as Array<{ timestamp: number | string; ships: unknown; alerts: unknown; zones: unknown }>)
+          .map((f) => ({
+            timestamp: typeof f.timestamp === 'string' ? new Date(f.timestamp).getTime() : f.timestamp,
+            ships: Array.isArray(f.ships) ? (f.ships as import('@/types/fleet').ShipState[]) : [],
+            alerts: Array.isArray(f.alerts) ? (f.alerts as import('@/types/fleet').FleetAlert[]) : [],
+            zones: Array.isArray(f.zones) ? (f.zones as import('@/types/fleet').RestrictedZone[]) : [],
+            directives: [],
+          }))
+        if (normalized.length > 0) setPlaybackFrames(normalized)
+      })
+      .catch(() => undefined)
+  }, [setPlaybackFrames])
+
+  useEffect(() => {
+    recorderRef.current.pushSnapshot({
+      ships: liveShipsRaw,
+      alerts,
+      zones,
+      directives,
+    })
+    setPlaybackFrames(recorderRef.current.getFrames())
+  }, [liveShipsRaw, alerts, zones, directives, setPlaybackFrames])
+
+  useEffect(() => {
+    if (playbackMode) return
+    const generated = proximityRef.current.scan(liveShipsRaw)
+    for (const a of generated) {
+      void fetch('/api/alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: a.type,
+          severity: a.severity,
+          shipId: a.shipId,
+          message: a.message,
+          metadata: a.metadata,
+        }),
+      })
+    }
+  }, [liveShipsRaw, playbackMode])
+
+  useEffect(() => {
+    setPlaybackFlag(playbackMode, playbackCursor ?? undefined)
+  }, [playbackMode, playbackCursor, setPlaybackFlag])
+
+  const ships = useMemo(() => {
+    if (playbackMode) {
+      return findFrameAt(playbackFrames, playbackCursor)?.ships ?? []
+    }
+    return liveShipsRaw.map((ship) => {
+      const render = renderShips[ship.id]
+      if (!render) return ship
+      return {
+        ...ship,
+        position: render.position,
+        heading: render.heading,
+        speed: render.speed,
+      }
+    })
+  }, [liveShipsRaw, playbackMode, playbackFrames, playbackCursor, renderShips])
+
   const selectedShip = ships.find(s => s.id === selectedShipId) ?? null
 
   const unackedAlerts = alerts.filter(a => !a.acknowledged)
@@ -71,6 +190,7 @@ export default function CommandDashboard() {
 
       {/* Main map */}
       <div className="flex-1 relative">
+        <PlaybackToolbar />
         <FleetMap />
         {unackedAlerts.length > 0 && (
           <div className="absolute top-3 right-3 z-[1000] bg-red-600 text-white text-xs font-bold px-2 py-1 rounded">
@@ -84,10 +204,98 @@ export default function CommandDashboard() {
         {selectedShip ? (
           <ShipSidebar ship={selectedShip} />
         ) : (
-          <AlertPanel alerts={unackedAlerts} />
+          <div className="flex flex-col h-full overflow-y-auto">
+            <div className="flex-1">
+              <AlertPanel alerts={unackedAlerts} />
+            </div>
+            {recommendations.length > 0 && (
+              <div className="p-4 border-t border-slate-800 bg-slate-900/50">
+                <div className="text-[10px] font-semibold text-cyan-400 mb-3 tracking-[0.16em] uppercase flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                  AI Fleet Advisor
+                </div>
+                <div className="space-y-3">
+                  {recommendations.map(r => (
+                    <div key={r.id} className="border border-cyan-900/50 bg-cyan-950/20 p-3 rounded text-sm">
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="font-mono font-bold text-cyan-300 text-[11px]">{r.shipId}</span>
+                        <span className="font-mono text-cyan-500 text-[9px]">{r.confidenceScore}% CONF</span>
+                      </div>
+                      <div className="text-slate-200 text-xs leading-relaxed mb-2 font-medium">
+                        {r.rationale}
+                      </div>
+                      <div className="text-[10px] text-cyan-400/80 uppercase tracking-wide">
+                        ACTION: {r.type.replace(/_/g, ' ')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
+    </div>
+  )
+}
+
+function PlaybackToolbar() {
+  const {
+    isPlaybackMode,
+    isPlaying,
+    cursorTimestamp,
+    liveNowTimestamp,
+    frames,
+    enterPlayback,
+    exitPlayback,
+    setPlaying,
+    scrubTo,
+  } = usePlaybackStore()
+
+  const min = frames[0]?.timestamp ?? 0
+  const max = frames.at(-1)?.timestamp ?? 0
+
+  useEffect(() => {
+    if (!isPlaybackMode || !isPlaying) return
+    const id = setInterval(() => {
+      const cur = usePlaybackStore.getState().cursorTimestamp ?? min
+      const next = Math.min(cur + 1000, max)
+      usePlaybackStore.getState().scrubTo(next)
+      if (next >= max) usePlaybackStore.getState().setPlaying(false)
+    }, 1000)
+    return () => clearInterval(id)
+  }, [isPlaybackMode, isPlaying, min, max])
+
+  return (
+    <div className="absolute left-3 right-3 top-3 z-[1001] rounded border border-slate-700 bg-slate-950/90 p-2">
+      <div className="flex items-center gap-2 text-xs text-slate-300">
+        {!isPlaybackMode ? (
+          <button onClick={() => enterPlayback()} className="rounded bg-slate-800 px-2 py-1 hover:bg-slate-700">Replay</button>
+        ) : (
+          <>
+            <button onClick={() => setPlaying(!isPlaying)} className="rounded bg-slate-800 px-2 py-1 hover:bg-slate-700">
+              {isPlaying ? 'Pause' : 'Play'}
+            </button>
+            <button onClick={() => exitPlayback()} className="rounded bg-emerald-900/50 px-2 py-1 hover:bg-emerald-800/60">Live</button>
+          </>
+        )}
+        <span className="text-slate-500">
+          {isPlaybackMode
+            ? `Replay: ${cursorTimestamp ? new Date(cursorTimestamp).toLocaleTimeString() : '--'}`
+            : `Live: ${liveNowTimestamp ? new Date(liveNowTimestamp).toLocaleTimeString() : '--'}`}
+        </span>
+      </div>
+      {isPlaybackMode && (
+        <input
+          type="range"
+          min={min}
+          max={max}
+          value={cursorTimestamp ?? max}
+          onChange={(e) => scrubTo(Number(e.target.value))}
+          className="mt-2 w-full"
+        />
+      )}
     </div>
   )
 }
