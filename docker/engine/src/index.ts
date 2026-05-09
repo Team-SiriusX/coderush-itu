@@ -1,7 +1,9 @@
 import * as turf from '@turf/turf'
 import Pusher from 'pusher'
 import { PrismaClient } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
 import { createId } from '@paralleldrive/cuid2'
+import 'dotenv/config'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ShipStatus = 'normal'|'rerouting'|'distressed'|'stopped'|'stranded'|'insufficient_fuel'|'arrived'
@@ -106,7 +108,8 @@ const pusher = new Pusher({
   cluster: process.env.PUSHER_CLUSTER!,
   useTLS:  true,
 })
-const db = new PrismaClient()
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+const db = new PrismaClient({ adapter })
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getPort(id: string) { return PORTS.find(p => p.id === id) }
@@ -546,9 +549,12 @@ async function tick(): Promise<void> {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-console.log('[engine] connecting to database...')
-await db.$connect()
-console.log('[engine] computing initial A* routes for all ships...')
-ships.forEach(ship => computeRoute(ship))
-console.log('[engine] starting 1Hz simulation loop')
-setInterval(() => { tick().catch(console.error) }, TICK_MS)
+async function boot() {
+  console.log('[engine] connecting to database...')
+  await db.$connect()
+  console.log('[engine] computing initial A* routes for all ships...')
+  ships.forEach(ship => computeRoute(ship))
+  console.log('[engine] starting 1Hz simulation loop')
+  setInterval(() => { tick().catch(console.error) }, TICK_MS)
+}
+boot().catch(console.error)

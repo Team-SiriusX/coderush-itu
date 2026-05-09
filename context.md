@@ -11,6 +11,12 @@
 - Full 1Hz simulation engine (A* routing, dead reckoning, geofencing, proximity, weather, playback, Pusher events).
 - Zone sync from DB every 5 ticks.
 - Alert deduplication window (30s per alert type/ship).
+- Command dashboard: dark Leaflet map with 15 live ship markers fed by Pusher.
+- Ship markers rotate to heading, color-coded by status.
+- Left sidebar: live ship list with fuel and status.
+- Right panel: alert feed OR selected ship details with directive buttons.
+- Dead reckoning: markers update position every Pusher tick (1Hz).
+- useFleetSync hook: subscribes to fleet/alerts/zones Pusher channels.
 - Updated documentation snapshot.
 
 ## Files Added
@@ -22,6 +28,13 @@
 - src/lib/pusher-server.ts
 - src/lib/pusher-client.ts
 - src/constants/realtime-events.ts
+- src/app/command/page.tsx
+- src/app/page.tsx
+- src/components/command/command-dashboard.tsx
+- src/components/command/fleet-map.tsx
+- src/components/command/alert-panel.tsx
+- src/components/command/ship-sidebar.tsx
+- src/hooks/use-fleet-sync.ts
 
 ## Files Removed
 - src/lib/socket-server.ts
