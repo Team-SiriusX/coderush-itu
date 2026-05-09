@@ -5,6 +5,7 @@ import { useFleetSync } from '@/hooks/use-fleet-sync'
 import { useFleetStore } from '@/stores/fleet-store'
 import AlertPanel from '@/components/command/alert-panel'
 import ShipSidebar from '@/components/command/ship-sidebar'
+import { GlobeLive } from '@/components/ui/cobe-globe-live'
 
 // Leaflet must be loaded client-side only (no SSR)
 const FleetMap = dynamic(() => import('@/components/command/fleet-map'), {
@@ -43,6 +44,17 @@ export default function CommandDashboard() {
           {ships.map(ship => (
             <ShipListItem key={ship.id} ship={ship} selected={ship.id === selectedShipId} />
           ))}
+        </div>
+        <div className="p-4 border-t border-slate-800 bg-slate-950 flex flex-col items-center justify-center">
+          <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest w-full text-center mb-2">Global Tracking</div>
+          <div className="w-full max-w-[200px]">
+            <GlobeLive 
+              markers={ships.filter(s => s.status !== 'arrived').map(s => ({ 
+                id: s.id, 
+                location: [s.position.lat, s.position.lng] 
+              }))} 
+            />
+          </div>
         </div>
       </div>
 
