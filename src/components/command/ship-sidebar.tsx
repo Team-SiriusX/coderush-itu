@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useFleetStore } from '@/stores/fleet-store'
 import type { ShipState } from '@/types/fleet'
 
@@ -47,7 +48,7 @@ export default function ShipSidebar({ ship }: { ship: ShipState }) {
           ${ship.status === 'normal'      ? 'border-primary/50 bg-primary/10 text-primary radar-glow' :
             ship.status === 'rerouting'   ? 'border-yellow-500/50 bg-yellow-900/20 text-yellow-400' :
             ship.status === 'arrived'     ? 'border-muted-foreground/50 bg-muted/10 text-muted-foreground' :
-            'border-red-500/50 bg-red-900/20 text-red-400 radar-glow-red'}`}>
+            'border-red-500/50 bg-red-900/20 text-red-400'}`}>
           STATUS :: {ship.status.replace(/_/g, ' ').toUpperCase()}
         </div>
       </div>
@@ -85,7 +86,7 @@ export default function ShipSidebar({ ship }: { ship: ShipState }) {
         </div>
         <div className="grid grid-cols-2 gap-2">
           {(['HOLD', 'REROUTE', 'DIVERT', 'RETURN_TO_PORT'] as const).map(type => (
-            <DirectiveButton key={type} shipId={ship.id} type={type} />
+            <DirectiveButton key={type} shipId={ship.id} type={type} issuedById="command" />
           ))}
         </div>
       </div>
@@ -103,17 +104,22 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 function DirectiveButton({
-  shipId, type,
+  shipId, type, issuedById,
 }: {
   shipId: string
   type: 'HOLD' | 'REROUTE' | 'DIVERT' | 'RETURN_TO_PORT'
+  issuedById: string
 }) {
+  const [sent, setSent] = useState(false)
+
   const handleClick = async () => {
+    setSent(true)
     await fetch('/api/directives', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shipId, type, payload: {} }),
+      body: JSON.stringify({ shipId, type, payload: {}, issuedById }),
     })
+    setTimeout(() => setSent(false), 2000)
   }
 
   const labels: Record<string, string> = {
@@ -126,11 +132,13 @@ function DirectiveButton({
   return (
     <button
       onClick={handleClick}
+      disabled={sent}
       className="text-center text-[10px] font-mono font-bold px-2 py-2 rounded 
         bg-background border border-primary/30 text-primary/80 
-        hover:bg-primary hover:text-background hover:shadow-glow transition-all active:scale-95"
+        hover:bg-primary hover:text-background hover:shadow-glow 
+        transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
     >
-      {labels[type]}
+      {sent ? '✓ SENT' : labels[type]}
     </button>
   )
 }
