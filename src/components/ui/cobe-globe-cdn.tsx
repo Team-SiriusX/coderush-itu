@@ -185,11 +185,16 @@ export function GlobeCdn({
 
       {markers.map((m, idx) => {
         const angle = (Math.PI * 2 * idx) / Math.max(markers.length, 1)
-        const radius = 58
+        const radius = 64
         const captionDx = Math.cos(angle) * radius
         const captionDy = Math.sin(angle) * radius
         const lineAngle = (angle * 180) / Math.PI
-        const lineLength = radius
+        const lineLength = radius - 10
+        // Ships can share nearly identical coordinates at spawn.
+        // Slightly fan origins so beams stay readable while remaining location-pinned.
+        const originFan = 6 + (idx % 3) * 3
+        const originDx = Math.cos(angle) * originFan
+        const originDy = Math.sin(angle) * originFan
         return (
           <div
             key={m.id}
@@ -199,7 +204,7 @@ export function GlobeCdn({
               positionAnchor: `--cobe-${m.id}`,
               bottom: "anchor(center)",
               left: "anchor(center)",
-              translate: "0 0",
+              translate: `${originDx}px ${originDy}px`,
               display: "block",
               pointerEvents: "none" as const,
               opacity: `var(--cobe-visible-${m.id}, 0)`,
@@ -213,12 +218,12 @@ export function GlobeCdn({
                 left: 0,
                 top: -1,
                 width: lineLength,
-                height: 3,
+                height: 2,
                 background:
-                  "linear-gradient(90deg, rgba(248,113,113,0.98) 0%, rgba(248,113,113,0.8) 35%, rgba(248,113,113,0.24) 100%)",
-                clipPath: "polygon(0 35%, 88% 35%, 100% 50%, 88% 65%, 0 65%)",
+                  "linear-gradient(90deg, rgba(248,113,113,0.98) 0%, rgba(248,113,113,0.7) 45%, rgba(248,113,113,0.1) 100%)",
+                clipPath: "polygon(0 38%, 92% 38%, 100% 50%, 92% 62%, 0 62%)",
                 boxShadow:
-                  "0 0 10px rgba(248,113,113,0.45), 0 0 20px rgba(248,113,113,0.2), inset 0 0 3px rgba(255,255,255,0.35)",
+                  "0 0 6px rgba(248,113,113,0.4), 0 0 14px rgba(248,113,113,0.18)",
                 transform: `rotate(${lineAngle}deg)`,
                 transformOrigin: "0 50%",
                 borderRadius: 2,
@@ -237,31 +242,30 @@ export function GlobeCdn({
               }}
             />
 
-            {(markers.length <= 8 || idx < 8) && (
-              <span
-                style={{
-                  position: "absolute",
-                  left: captionDx,
-                  top: captionDy,
-                  fontFamily: "system-ui, sans-serif",
-                  fontSize: "0.58rem",
-                  fontWeight: 600,
-                  color: "#fee2e2",
-                  background: "rgba(2, 6, 23, 0.88)",
-                  border: "1px solid rgba(248, 113, 113, 0.45)",
-                  padding: "2px 8px",
-                  borderRadius: 6,
-                  letterSpacing: "0.02em",
-                  whiteSpace: "nowrap",
-                  maxWidth: "120px",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  boxShadow: "0 6px 12px rgba(2, 6, 23, 0.45)",
-                }}
-              >
-                {m.region}
-              </span>
-            )}
+            <span
+              style={{
+                position: "absolute",
+                left: captionDx + (captionDx > 0 ? 8 : -8),
+                top: captionDy,
+                fontFamily: "system-ui, sans-serif",
+                fontSize: "0.54rem",
+                fontWeight: 600,
+                color: "#fee2e2",
+                background: "rgba(2, 6, 23, 0.88)",
+                border: "1px solid rgba(248, 113, 113, 0.45)",
+                padding: "2px 7px",
+                borderRadius: 6,
+                letterSpacing: "0.02em",
+                whiteSpace: "nowrap",
+                maxWidth: "112px",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                boxShadow: "0 6px 12px rgba(2, 6, 23, 0.45)",
+                transform: captionDx > 0 ? "translateX(0)" : "translateX(-100%)",
+              }}
+            >
+              {m.region}
+            </span>
           </div>
         )
       })}

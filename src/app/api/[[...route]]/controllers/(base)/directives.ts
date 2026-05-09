@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { createId } from '@paralleldrive/cuid2'
 import db from '@/lib/db'
 import { getPusherServer } from '@/lib/pusher-server'
+import { simulationEngine } from '@/engine/simulation-engine'
 
 const directives = new Hono()
 
@@ -32,6 +33,9 @@ directives.post('/', async (c) => {
     payload:   directive.payload,
     createdAt: directive.createdAt.getTime(),
   })
+
+  // Apply directive to live engine state
+  simulationEngine.applyDirective(body.shipId, body.type)
 
   return c.json(directive, 201)
 })

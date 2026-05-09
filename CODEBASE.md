@@ -1,406 +1,314 @@
 # Codebase Snapshot (2026-05-09)
 
-## Summary
-- Project name: softec-26 (package.json)
-- Framework: Next.js 16 App Router + React 19 + TypeScript
-- Styling: Tailwind CSS 4, shadcn/ui (base-luma), tw-animate-css
-- API: Hono mounted at /api with typed client (Hono + Hono client)
-- Auth: Better Auth (JWT cookie cache) + Prisma adapter, Next.js auth handler
-- Data: Prisma schema for PostgreSQL, migrations tracked in prisma/migrations
-- Realtime + state: Pusher, Zustand
-- Maps + geo: Leaflet (imperative lifecycle), Turf.js
-- LLM tooling: OpenRouter SDK, LangChain
-- Containers: Docker (web + engine) with Postgres
+## Executive Summary
+- Project: `softec-26`
+- Stack: Next.js 16.2.4 (App Router) + React 19.2 + TypeScript (strict)
+- Styling/UI: Tailwind CSS 4 + shadcn/ui + custom tactical theme tokens
+- API runtime: Hono mounted inside Next route handlers at `/api/*`
+- Auth: Better Auth (email/password + GitHub + Google) with JWT cookie cache
+- DB: PostgreSQL via Prisma schema; Better Auth + fleet operations models
+- Realtime: Pusher (`fleet`, `alerts`, `zones`, `captain-{shipId}`)
+- State: Zustand (`fleet-store`) + React Query provider scaffolding
+- Mapping/Geo: Leaflet (imperative init/teardown), Turf.js, Cobe globe visualizations
+- AI integration: OpenRouter for distress-message structured extraction
 
-## Implemented So Far (2026-05-09)
-- Added Command Center route at `/command` with three-pane dashboard layout:
-  left ship list, center tactical map, right selected-ship/alerts panel.
-- Added command UI modules:
-  `src/components/command/command-dashboard.tsx`,
-  `src/components/command/fleet-map.tsx`,
-  `src/components/command/ship-sidebar.tsx`,
-  `src/components/command/alert-panel.tsx`.
-- Added realtime fleet synchronization hook:
-  `src/hooks/use-fleet-sync.ts` subscribing to Pusher channels (`fleet`, `alerts`, `zones`) and updating Zustand store.
-- Added tactical map rendering with custom SVG ship markers, status color coding, heading rotation, tooltip metadata, and click-to-select behavior.
-- Implemented strict-mode-safe Leaflet lifecycle in `fleet-map.tsx`:
-  removed `react-leaflet` `MapContainer` usage from this feature and switched to direct `L.map(...)` initialization with idempotent teardown (`map.remove()`, marker cleanup, and `_leaflet_id` reset) to prevent `Map container is already initialized` runtime errors in Next.js 16 dev/fast-refresh.
-- Added stale-closure-safe marker click handling by reading current selection from `useFleetStore.getState()` at click time.
-- Added global live globe overlay in Command Dashboard using `GlobeLive` with active ship markers.
-- Role-based routing: COMMAND -> /command, CAPTAIN -> /captain.
-- Captain dashboard implemented with real-time fuel gauge, status, position, and incoming directives.
-- Captain dashboard subscribes to `captain-{shipId}` Pusher channel for directives.
-- Distress signal textarea posts to `/api/distress`.
-- Seed flow added for demo users:
-  `command@hormuz.ops` (COMMAND) and `captain@hormuz.ops` (CAPTAIN, MV-7).
+---
 
-## AGENT_CONTEXT
-### What Was Implemented
-- Role-based routing: COMMAND -> /command, CAPTAIN -> /captain
-- Captain dashboard: real-time fuel gauge, status, position, incoming directives
-- Captain subscribes to captain-{shipId} Pusher channel for directives
-- Distress signal textarea -> POST /api/distress (AI extraction in next prompt)
-- Seed script: command@hormuz.ops (COMMAND) + captain@hormuz.ops (CAPTAIN, MV-7)
+## Current Product Surfaces
 
-### Files Added
-- prisma/seed.ts
-- src/app/captain/page.tsx
-- src/components/captain/captain-dashboard.tsx
+### 1. Role-Aware Entry Routing
+- `src/app/page.tsx`
+  - Server-side user lookup via `currentUser()`.
+  - Redirect matrix:
+    - unauthenticated -> `/auth/sign-in`
+    - `COMMAND` -> `/command`
+    - `CAPTAIN` -> `/captain`
+    - fallback -> `/auth/sign-in`
 
-### Files Modified
-- src/app/page.tsx - role-based redirect
-- src/app/auth/sign-in/page.tsx - demo credentials hint
+### 2. Command Center (`/command`)
+- `src/app/command/page.tsx`
+  - Suspense-wrapped `CommandDashboard`.
+- `src/components/command/command-dashboard.tsx`
+  - 3-pane layout:
+    - left: fleet list + live globe overlay
+    - center: tactical Leaflet map
+    - right: selected ship details (`ShipSidebar`) or alert log (`AlertPanel`)
+  - Uses `useFleetSync()` for realtime hydration from Pusher.
+  - Computes `liveShips`, unacked alerts, selected ship.
+  - Builds globe marker payload with anti-overlap bucketing and radial offsets.
 
-## Scripts (package.json)
-- dev: next dev
-- build: next build
-- start: next start
-- lint: eslint
-- format: prettier --write .
-- format:check: prettier --check .
+### 3. Captain Console (`/captain`)
+- `src/app/captain/page.tsx`
+  - Role guard: only `CAPTAIN` allowed, otherwise redirect `/command`.
+  - Injects `shipId` from `user.assignedShipId` (default `MV-7`).
+- `src/components/captain/captain-dashboard.tsx`
+  - Live ship status card, fuel gauge, telemetry grid.
+  - Subscribes to `captain-{shipId}` channel for directives.
+  - Directive acceptance: `POST /api/directives/:id/respond`.
+  - Distress send: `POST /api/distress` with free-text payload.
 
-## Tooling and Config
-- Package manager: pnpm (pnpm-workspace.yaml present)
-- Lint: eslint.config.mjs (next core-web-vitals + typescript)
-- Format: .prettierrc (single quotes, tailwindcss + organize-imports plugins)
-- Tailwind: postcss.config.mjs (tailwindcss v4 via @tailwindcss/postcss)
-- TS: tsconfig.json (strict, moduleResolution bundler, path alias @/* -> src/*)
-- Prisma: prisma.config.ts (schema at prisma/schema.prisma, migrations path set)
-- shadcn/ui: components.json (rsc true, css at src/app/globals.css)
+### 4. Globe Demo Route
+- `src/app/globe-demo/page.tsx`
+  - Renders `GlobeFlights` demo component for Cobe experiments.
 
-## Environment Variables Used
-- DATABASE_URL
-- BETTER_AUTH_SECRET
-- GITHUB_CLIENT_ID
-- GITHUB_CLIENT_SECRET
-- GOOGLE_CLIENT_ID
-- GOOGLE_CLIENT_SECRET
-- NEXT_PUBLIC_API_URL (optional; defaults to http://localhost:3000)
-- NEXT_PUBLIC_APP_URL (app base URL)
-- OPEN_ROUTER_API_KEY
-- PUSHER_APP_ID
-- PUSHER_KEY
-- PUSHER_SECRET
-- PUSHER_CLUSTER
-- NEXT_PUBLIC_PUSHER_KEY
-- NEXT_PUBLIC_PUSHER_CLUSTER
+---
 
-## Routes and Behavior
-### App routes
-- /: src/app/page.tsx (shows authenticated/unauthenticated via currentUser)
-- /auth/sign-in: src/app/auth/sign-in/page.tsx
-- /auth/sign-up: src/app/auth/sign-up/page.tsx
+## Routing, Auth, and Request Gatekeeping
 
-### API routes
-- /api/*: src/app/api/[[...route]]/route.ts (Hono router, no subroutes mounted)
-- /api/auth/*: src/app/api/auth/[...all]/route.ts (Better Auth handler)
+### Proxy Gate (Next 16 style)
+- `src/proxy.ts`
+  - Uses Better Auth cookie cache to resolve auth state.
+  - Allows:
+    - API routes (`/api/*`, `/trpc/*`)
+    - explicit auth routes (`src/routes.ts`)
+    - public routes (`/`, `/sample`, `/chat`)
+  - Redirects unauthenticated private routes to `/auth/sign-in`.
 
-### Auth/public routing rules (src/routes.ts + src/proxy.ts)
-- Auth routes: /auth/sign-in, /auth/sign-up, /auth/forget-password,
-  /auth/reset-password, /auth/verify-email, /auth/verify-email/verify
-- Public routes: /, /sample, /chat
-- Default login redirect: /
-- Middleware-like proxy logic in src/proxy.ts
+### Route Constants
+- `src/routes.ts`
+  - `authRoutes`, `publicRoutes`, `SIGN_IN_PAGE_PATH`, `DEFAULT_LOGIN_REDIRECT`.
 
-## Data Model (prisma/schema.prisma)
-### Enums
-- UserRole: COMMAND, CAPTAIN
-- AlertType: GEOFENCE_BREACH, PROXIMITY_WARNING, DISTRESS_SIGNAL, LOW_FUEL,
-  OUT_OF_FUEL, ROUTE_BLOCKED, INSUFFICIENT_FUEL
-- AlertSeverity: LOW, MEDIUM, HIGH, CRITICAL
-- DirectiveType: REROUTE, HOLD, DIVERT, RETURN_TO_PORT
-- DirectiveResponse: ACCEPT, ESCALATE_DISTRESS
+### Better Auth Server Config
+- `src/lib/auth.ts`
+  - `betterAuth` with Prisma adapter over Postgres adapter (`@prisma/adapter-pg`).
+  - Enabled providers:
+    - email/password
+    - GitHub OAuth
+    - Google OAuth
+  - Session cache: JWT cookie strategy.
 
-### Models
-- User: Better Auth user profile with role and optional assignedShipId
-- Session: Better Auth session storage
-- Account: OAuth account storage
-- Verification: verification tokens
-- RestrictedZone: geojson-like restricted zones
-- Alert: fleet alert records
-- Directive: command directives sent to ships
-- DistressMessage: raw distress payload + extracted metadata
-- PlaybackFrame: timestamped playback snapshots (ships/alerts/zones)
+### Current User Resolver
+- `src/lib/current-user.ts`
+  - Reads cookie cache from request headers.
+  - Hydrates DB user fields:
+    - `id`, `email`, `name`, `image`, `role`, `assignedShipId`.
 
-## Realtime, Fleet, and Simulation
-- src/lib/pusher-server.ts: Pusher server client
-- src/lib/pusher-client.ts: Pusher browser client
-- src/constants/realtime-events.ts: shared event names
-- src/types/fleet.ts: fleet domain types (ships, alerts, zones, directives, playback)
-- src/stores/fleet-store.ts: Zustand store for fleet UI state
-- src/simulation/fleet-data.ts: ports, bounding box, navigable water polygon, initial ships
+---
 
-## Key Runtime Modules
-- src/lib/auth.ts: Better Auth server config + Prisma adapter
-- src/lib/auth-client.ts: Better Auth React client
-- src/lib/db.ts: Prisma client with PG adapter (singleton in dev)
-- src/lib/hono.ts: Hono client typed against API routes
-- src/lib/current-user.ts: server helper to read session from cookies
-- src/lib/open-router.ts: OpenRouter SDK client
-- src/components/providers: React Query + Sonner toaster
-- src/hooks/use-mobile.ts: matchMedia-based mobile detection
+## API Layer (Hono in Next)
 
-## UI Component Library (src/components/ui)
-- accordion.tsx
-- alert-dialog.tsx
-- alert.tsx
-- aspect-ratio.tsx
-- avatar.tsx
-- badge.tsx
-- breadcrumb.tsx
-- button-group.tsx
-- button.tsx
-- calendar.tsx
-- card.tsx
-- carousel.tsx
-- chart.tsx
-- checkbox.tsx
-- collapsible.tsx
-- combobox.tsx
-- command.tsx
-- context-menu.tsx
-- dialog.tsx
-- direction.tsx
-- drawer.tsx
-- dropdown-menu.tsx
-- empty.tsx
-- field.tsx
-- hover-card.tsx
-- input-group.tsx
-- input-otp.tsx
-- input.tsx
-- item.tsx
-- kbd.tsx
-- label.tsx
-- menubar.tsx
-- native-select.tsx
-- navigation-menu.tsx
-- pagination.tsx
-- popover.tsx
-- progress.tsx
-- radio-group.tsx
-- resizable.tsx
-- scroll-area.tsx
-- select.tsx
-- separator.tsx
-- sheet.tsx
-- sidebar.tsx
-- skeleton.tsx
-- slider.tsx
-- sonner.tsx
-- spinner.tsx
-- switch.tsx
-- table.tsx
-- tabs.tsx
-- textarea.tsx
-- toggle-group.tsx
-- toggle.tsx
-- tooltip.tsx
+### Entrypoint
+- `src/app/api/[[...route]]/route.ts`
+  - Creates `Hono().basePath('/api')`.
+  - Mounts base controller at `/`.
+  - Exposes `GET/POST/PUT/PATCH/DELETE` via `hono/vercel` `handle()`.
+  - Typed export: `AppType`.
 
-## File Tree (complete)
+### Mounted Base Controllers
+- `src/app/api/[[...route]]/controllers/(base)/index.ts`
+  - `/directives`
+  - `/distress`
+  - `/zones`
+  - `/alerts`
+  - `/playback`
+  - `/health`
 
-```text
-.
-|-- AGENTS.md
-|-- CLAUDE.md
-|-- CODEBASE.md
-|-- README.md
-|-- components.json
-|-- eslint.config.mjs
-|-- next.config.ts
-|-- package.json
-|-- pnpm-lock.yaml
-|-- pnpm-workspace.yaml
-|-- postcss.config.mjs
-|-- prisma.config.ts
-|-- tsconfig.json
-|-- .gitignore
-|-- .prettierignore
-|-- .prettierrc
-|-- .env
-|-- Dockerfile
-|-- docker-compose.yml
-|-- docker/
-|   `-- engine/
-|       |-- Dockerfile
-|       |-- package.json
-|       `-- src/
-|           `-- index.ts
-|-- prisma/
-|   |-- schema.prisma
-|   `-- migrations/
-|       |-- migration_lock.toml
-|       `-- 20260509065517_fleet_init/
-|           `-- migration.sql
-|-- public/
-|   |-- file.svg
-|   |-- globe.svg
-|   |-- next.svg
-|   |-- vercel.svg
-|   `-- window.svg
-`-- src/
-    |-- proxy.ts
-    |-- routes.ts
-    |-- app/
-    |   |-- favicon.ico
-    |   |-- globals.css
-    |   |-- layout.tsx
-    |   |-- page.tsx
-    |   |-- api/
-    |   |   |-- [[...route]]/
-    |   |   |   |-- route.ts
-    |   |   |   |-- controllers/
-    |   |   |   |   `-- (base)/
-    |   |   |   |       |-- index.ts
-    |   |   |   |       `-- sample.ts
-    |   |   |   `-- middleware/
-    |   |   |       `-- auth-middleware.ts
-    |   |   `-- auth/
-    |   |       `-- [...all]/
-    |   |           `-- route.ts
-    |   `-- auth/
-    |       |-- sign-in/
-    |       |   `-- page.tsx
-    |       `-- sign-up/
-    |           `-- page.tsx
-    |-- components/
-    |   |-- providers/
-    |   |   |-- index.tsx
-    |   |   `-- query-provider.tsx
-    |   `-- ui/
-    |       |-- accordion.tsx
-    |       |-- alert-dialog.tsx
-    |       |-- alert.tsx
-    |       |-- aspect-ratio.tsx
-    |       |-- avatar.tsx
-    |       |-- badge.tsx
-    |       |-- breadcrumb.tsx
-    |       |-- button-group.tsx
-    |       |-- button.tsx
-    |       |-- calendar.tsx
-    |       |-- card.tsx
-    |       |-- carousel.tsx
-    |       |-- chart.tsx
-    |       |-- checkbox.tsx
-    |       |-- collapsible.tsx
-    |       |-- combobox.tsx
-    |       |-- command.tsx
-    |       |-- context-menu.tsx
-    |       |-- dialog.tsx
-    |       |-- direction.tsx
-    |       |-- drawer.tsx
-    |       |-- dropdown-menu.tsx
-    |       |-- empty.tsx
-    |       |-- field.tsx
-    |       |-- hover-card.tsx
-    |       |-- input-group.tsx
-    |       |-- input-otp.tsx
-    |       |-- input.tsx
-    |       |-- item.tsx
-    |       |-- kbd.tsx
-    |       |-- label.tsx
-    |       |-- menubar.tsx
-    |       |-- native-select.tsx
-    |       |-- navigation-menu.tsx
-    |       |-- pagination.tsx
-    |       |-- popover.tsx
-    |       |-- progress.tsx
-    |       |-- radio-group.tsx
-    |       |-- resizable.tsx
-    |       |-- scroll-area.tsx
-    |       |-- select.tsx
-    |       |-- separator.tsx
-    |       |-- sheet.tsx
-    |       |-- sidebar.tsx
-    |       |-- skeleton.tsx
-    |       |-- slider.tsx
-    |       |-- sonner.tsx
-    |       |-- spinner.tsx
-    |       |-- switch.tsx
-    |       |-- table.tsx
-    |       |-- tabs.tsx
-    |       |-- textarea.tsx
-    |       |-- toggle-group.tsx
-    |       |-- toggle.tsx
-    |       `-- tooltip.tsx
-    |-- constants/
-    |   |-- query-keys.ts
-    |   `-- realtime-events.ts
-    |-- hooks/
-    |   `-- use-mobile.ts
-    |-- lib/
-    |   |-- auth-client.ts
-    |   |-- auth.ts
-    |   |-- current-user.ts
-    |   |-- db.ts
-    |   |-- hono.ts
-    |   |-- open-router.ts
-    |   |-- pusher-client.ts
-    |   |-- pusher-server.ts
-    |   `-- utils.ts
-    |-- simulation/
-    |   `-- fleet-data.ts
-    |-- stores/
-    |   `-- fleet-store.ts
-    `-- types/
-        `-- fleet.ts
-```
+### Key Implemented Endpoints
+- Distress ingestion + AI extraction:
+  - `src/app/api/[[...route]]/controllers/(base)/distress.ts`
+  - Flow:
+    1. Accept `{ shipId, message }`
+    2. Prompt OpenRouter model to emit strict JSON extraction
+    3. Fallback extraction on parse/model failure
+    4. Persist `DistressMessage`
+    5. Create `Alert` (`DISTRESS_SIGNAL`)
+    6. Publish realtime alert on Pusher `alerts:alert:new`
+- Directives (additional controller):
+  - `src/app/api/[[...route]]/controllers/directives.ts`
+  - Validates payload with `zod` and persists directive.
+  - Broadcasts `fleet-ops:new-directive`.
 
-## Key Configs
+### Auth API
+- `src/app/api/auth/[...all]/route.ts`
+  - Better Auth route adapter for auth actions.
 
-- components.json: shadcn/ui configuration (style base-luma, Tailwind CSS path src/app/globals.css, aliases for components/utils/ui/lib/hooks).
-- next.config.ts: default Next.js config placeholder.
-- tsconfig.json: strict TypeScript, bundler module resolution, path alias @/* -> src/*.
-- eslint.config.mjs: Next core-web-vitals + TypeScript config with extra global ignores.
-- postcss.config.mjs: Tailwind CSS PostCSS plugin.
-- prisma.config.ts: Prisma schema and migrations paths, DATABASE_URL datasource.
-- .prettierrc: single quotes, trailing commas, Tailwind + organize-imports plugins.
-- pnpm-workspace.yaml: ignored built deps (sharp, unrs-resolver).
-- Dockerfile: Next.js production build for web service.
-- docker-compose.yml: Postgres + web + engine services.
-- docker/engine/Dockerfile: tsx-based engine runner.
+---
 
-## App Entry Points
+## Realtime and Client State
 
-- src/app/layout.tsx: Root layout, global fonts (Inter + Geist), Providers wrapper, base metadata.
-- src/app/page.tsx: Uses currentUser() to render authenticated/unauthenticated state.
-- src/app/globals.css: Tailwind v4 base with CSS variables for theme tokens.
+### Zustand Fleet Store
+- `src/stores/fleet-store.ts`
+- State:
+  - `ships`, `selectedShipId`, `alerts`, `zones`, `directives`
+  - playback flags: `isPlayback`, `playbackTimestamp`
+- Actions:
+  - set ships/selection
+  - add/update alerts
+  - add/remove/set zones
+  - add directives
+  - playback controls
 
-## API Layer (Hono + Next.js)
+### Pusher Sync Hook
+- `src/hooks/use-fleet-sync.ts`
+- Subscriptions:
+  - `fleet` -> `fleet:update` -> `setShips`
+  - `alerts` -> `alert:new`, `alert:update`
+  - `zones` -> `zone:update`
+- Cleanup unsubscribes on unmount.
 
-- src/app/api/[[...route]]/route.ts: Hono app mounted at /api, error handler, GET/POST/PUT/PATCH/DELETE handlers for Next.js.
-- src/app/api/[[...route]]/middleware/auth-middleware.ts: Better Auth cookie-based session validation, attaches user to request.
+### Pusher Clients
+- `src/lib/pusher-client.ts` (browser)
+- `src/lib/pusher-server.ts` (server trigger client)
 
-## Auth Flow
+---
 
-- src/app/api/auth/[...all]/route.ts: Better Auth Next.js handler (GET/POST).
-- src/lib/auth.ts: Better Auth config with Prisma adapter + JWT cookie cache; email/password + GitHub/Google providers.
-- src/lib/auth-client.ts: client-side Better Auth hooks.
-- src/routes.ts and src/proxy.ts: route gating and auth redirects via middleware.
-- src/app/auth/sign-in/page.tsx and src/app/auth/sign-up/page.tsx: UI for auth flows with Sonner toasts.
+## Tactical UI Modules
 
-## Data Layer (Prisma)
+### Fleet Map (Leaflet imperative lifecycle)
+- `src/components/command/fleet-map.tsx`
+- Important implementation details:
+  - `L.map()` manually initialized on container ref.
+  - Strict-mode and fast-refresh defense:
+    - checks/removes stale `_leaflet_id` before init
+    - full teardown (`marker.remove`, `map.remove`, clear refs)
+    - removes `_leaflet_id` again on cleanup
+  - Marker rendering:
+    - custom SVG ship triangle rotated by `heading`
+    - color by status
+    - click toggles selected ship via Zustand
+  - Tooltip includes tactical metadata.
 
-Prisma schema defines Better Auth tables plus fleet alerting and playback data:
+### Ship Sidebar
+- `src/components/command/ship-sidebar.tsx`
+- Features:
+  - status badge and telemetry rows
+  - fuel progress indicator with threshold colors
+  - command directive buttons (`HOLD`, `REROUTE`, `DIVERT`, `RETURN_TO_PORT`)
+  - posts to `/api/directives`
 
-- Enums: UserRole, AlertType, AlertSeverity, DirectiveType, DirectiveResponse
-- Models: User, Session, Account, Verification, RestrictedZone, Alert, Directive,
-  DistressMessage, PlaybackFrame
+### Alert Panel
+- `src/components/command/alert-panel.tsx`
+- Features:
+  - unacked alert list with severity styles
+  - `ACK` action (`PATCH /api/alerts/:id/acknowledge`)
+  - distress metadata expansion (systems, casualties, assistance)
 
-## Client Data Fetching and State
+### Globe Overlay (Command Sidebar)
+- `src/components/ui/cobe-globe-cdn.tsx`
+- Behavior:
+  - canvas-driven Cobe globe
+  - continuous phi rotation with drag-to-rotate interaction
+  - marker/arc updates using refs to avoid re-init churn
+  - tactical caption beams with red visual treatment and truncation guard
+  - cleanup destroys globe and RAF loop
 
-- React Query provider: src/components/providers/query-provider.tsx
-- Zustand fleet store: src/stores/fleet-store.ts
+---
 
-## Utilities and Shared Helpers
+## Domain Model and Types
 
-- src/lib/hono.ts: Hono client typed with AppType and NEXT_PUBLIC_API_URL.
-- src/lib/db.ts: Prisma client with PostgreSQL adapter and global caching in dev.
-- src/lib/current-user.ts: session lookup via Better Auth cookie cache.
-- src/lib/open-router.ts: OpenRouter SDK client.
-- src/lib/pusher-server.ts: Pusher server client.
-- src/lib/pusher-client.ts: Pusher browser client.
-- src/lib/utils.ts: cn() class name helper.
-- src/hooks/use-mobile.ts: media-query hook for mobile detection.
-- src/constants/query-keys.ts: query key enum.
-- src/constants/realtime-events.ts: realtime event keys shared across services.
+### Prisma Enums (`prisma/schema.prisma`)
+- `UserRole`: `COMMAND`, `CAPTAIN`
+- `AlertType`: includes distress/fuel/proximity/geofence/route states
+- `AlertSeverity`: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`
+- `DirectiveType`: `REROUTE`, `HOLD`, `DIVERT`, `RETURN_TO_PORT`
+- `DirectiveResponse`: `ACCEPT`, `ESCALATE_DISTRESS`
+
+### Prisma Models (high-level)
+- Auth core: `User`, `Session`, `Account`, `Verification`
+- Fleet ops: `RestrictedZone`, `Alert`, `Directive`, `DistressMessage`, `PlaybackFrame`
+
+### TS Domain Types
+- `src/types/fleet.ts`
+  - `ShipState`, `FleetAlert`, `RestrictedZone`, `Directive`, `PlaybackFrame`
+  - normalized client-facing shapes (timestamps as numbers on client)
+
+---
+
+## Seed and Demo Users
+
+### Seed Script
+- `prisma/seed.ts`
+- Strategy:
+  - idempotent-ish ensure flow by email
+  - creates users through Better Auth signup API
+  - enforces role + assignment in DB
+- Users seeded:
+  - `command@hormuz.ops` / `command123` -> `COMMAND`
+  - `captain@hormuz.ops` / `captain123` -> `CAPTAIN`, `assignedShipId = MV-7`
+
+### Script Registration
+- `package.json` -> `"seed": "tsx prisma/seed.ts"`
+
+---
+
+## Tooling, Build, and Runtime
+
+### Core Scripts
+- `pnpm dev` -> Next dev
+- `pnpm engine` -> simulation engine runner under `docker/engine`
+- `pnpm seed` -> seed users
+- `pnpm build`, `pnpm start`, `pnpm lint`, `pnpm format`, `pnpm format:check`
+
+### TypeScript
+- `tsconfig.json`
+  - strict mode
+  - `moduleResolution: bundler`
+  - alias `@/* -> src/*`
+
+### shadcn/Tailwind
+- `components.json`
+  - style: `base-luma`
+  - ui alias: `@/components/ui`
+  - css path: `src/app/globals.css`
+- Tailwind v4 via `@tailwindcss/postcss`
+
+### Lint/Format
+- ESLint with Next + TS (`eslint.config.mjs`)
+- Prettier with organize-imports + tailwind plugin
+
+---
+
+## Environment Variables In Use
+- `DATABASE_URL`
+- `BETTER_AUTH_SECRET`
+- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+- `NEXT_PUBLIC_API_URL`
+- `NEXT_PUBLIC_APP_URL`
+- `OPEN_ROUTER_API_KEY`
+- `PUSHER_APP_ID`, `PUSHER_KEY`, `PUSHER_SECRET`, `PUSHER_CLUSTER`
+- `NEXT_PUBLIC_PUSHER_KEY`, `NEXT_PUBLIC_PUSHER_CLUSTER`
+
+---
+
+## Known Architectural Notes / Risks
+- There are two directive controller paths (`controllers/(base)/directives.ts` and `controllers/directives.ts`), which can cause confusion unless one is canonicalized.
+- `src/lib/auth.ts` and `prisma/seed.ts` import `PrismaClient` from `@prisma/client` directly, while repo guidance prefers generated client / shared `db` instance.
+- Leaflet is intentionally imperative in command map to avoid React-Leaflet + React 19 lifecycle issues observed earlier.
+- Distress AI extraction currently uses a free OpenRouter model and JSON parsing fallback; robust schema validation/retry loops are still advisable.
+
+---
+
+## High-Value Files (Quick Index)
+- Routing/Auth:
+  - `src/app/page.tsx`
+  - `src/proxy.ts`
+  - `src/routes.ts`
+  - `src/lib/auth.ts`
+  - `src/lib/current-user.ts`
+- Command Center:
+  - `src/components/command/command-dashboard.tsx`
+  - `src/components/command/fleet-map.tsx`
+  - `src/components/command/ship-sidebar.tsx`
+  - `src/components/command/alert-panel.tsx`
+- Captain:
+  - `src/app/captain/page.tsx`
+  - `src/components/captain/captain-dashboard.tsx`
+- API:
+  - `src/app/api/[[...route]]/route.ts`
+  - `src/app/api/[[...route]]/controllers/(base)/index.ts`
+  - `src/app/api/[[...route]]/controllers/(base)/distress.ts`
+- State/realtime:
+  - `src/hooks/use-fleet-sync.ts`
+  - `src/stores/fleet-store.ts`
+  - `src/lib/pusher-client.ts`
+  - `src/lib/pusher-server.ts`
+- Data and seed:
+  - `prisma/schema.prisma`
+  - `prisma/seed.ts`
+
+---
+
+## Last Updated
+- Snapshot generated on: **2026-05-09**
+- Basis: direct scan of current repository files in workspace.

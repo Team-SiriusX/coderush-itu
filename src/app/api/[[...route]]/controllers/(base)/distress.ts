@@ -3,6 +3,7 @@ import { createId } from '@paralleldrive/cuid2'
 import db from '@/lib/db'
 import { getPusherServer } from '@/lib/pusher-server'
 import { openRouter } from '@/lib/open-router'
+import { simulationEngine } from '@/engine/simulation-engine'
 
 const distress = new Hono()
 
@@ -106,6 +107,9 @@ Output:`
     metadata:     extraction,
     createdAt:    alert.createdAt.getTime(),
   })
+
+  // Mark ship as DISTRESSED in the live engine
+  simulationEngine.markDistressed(shipId)
 
   return c.json({ distress: distressRecord, alert, extraction }, 201)
 })
