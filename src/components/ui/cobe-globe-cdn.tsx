@@ -184,7 +184,12 @@ export function GlobeCdn({
       />
 
       {markers.map((m, idx) => {
-        const isRightSide = m.location[1] >= 0
+        const angle = (Math.PI * 2 * idx) / Math.max(markers.length, 1)
+        const radius = 58
+        const captionDx = Math.cos(angle) * radius
+        const captionDy = Math.sin(angle) * radius
+        const lineAngle = (angle * 180) / Math.PI
+        const lineLength = radius
         return (
           <div
             key={m.id}
@@ -194,11 +199,8 @@ export function GlobeCdn({
               positionAnchor: `--cobe-${m.id}`,
               bottom: "anchor(center)",
               left: "anchor(center)",
-              translate: isRightSide ? "12px -50%" : "calc(-100% - 12px) -50%",
-              display: "flex",
-              flexDirection: isRightSide ? ("row" as const) : ("row-reverse" as const),
-              alignItems: "center",
-              gap: 8,
+              translate: "0 0",
+              display: "block",
               pointerEvents: "none" as const,
               opacity: `var(--cobe-visible-${m.id}, 0)`,
               filter: `blur(calc((1 - var(--cobe-visible-${m.id}, 0)) * 8px))`,
@@ -207,34 +209,43 @@ export function GlobeCdn({
           >
             <div
               style={{
-                width: 30,
+                position: "absolute",
+                left: 0,
+                top: 0,
+                width: lineLength,
                 height: 2,
-                background: "linear-gradient(90deg, rgba(56,189,248,0.9), rgba(56,189,248,0.2))",
-                boxShadow: "0 0 8px rgba(56,189,248,0.35)",
-                transform: isRightSide ? "skewX(-26deg)" : "skewX(26deg)",
-                transformOrigin: isRightSide ? "left center" : "right center",
+                background: "linear-gradient(90deg, rgba(248,113,113,0.95), rgba(248,113,113,0.2))",
+                boxShadow: "0 0 8px rgba(248,113,113,0.4)",
+                transform: `rotate(${lineAngle}deg)`,
+                transformOrigin: "0 50%",
                 borderRadius: 999,
               }}
             />
             <div
               style={{
+                position: "absolute",
+                left: -3,
+                top: -3,
                 width: 6,
                 height: 6,
                 borderRadius: "999px",
-                background: "#38bdf8",
-                boxShadow: "0 0 8px rgba(56,189,248,0.9)",
+                background: "#ef4444",
+                boxShadow: "0 0 8px rgba(239,68,68,0.95)",
               }}
             />
 
             {(markers.length <= 8 || idx < 8) && (
               <span
                 style={{
+                  position: "absolute",
+                  left: captionDx,
+                  top: captionDy,
                   fontFamily: "system-ui, sans-serif",
                   fontSize: "0.58rem",
                   fontWeight: 600,
-                  color: "#dbeafe",
+                  color: "#fee2e2",
                   background: "rgba(2, 6, 23, 0.88)",
-                  border: "1px solid rgba(56, 189, 248, 0.42)",
+                  border: "1px solid rgba(248, 113, 113, 0.45)",
                   padding: "2px 8px",
                   borderRadius: 6,
                   letterSpacing: "0.02em",
@@ -254,4 +265,3 @@ export function GlobeCdn({
     </div>
   )
 }
-
