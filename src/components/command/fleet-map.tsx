@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { MapContainer, TileLayer, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useFleetStore } from '@/stores/fleet-store'
@@ -49,18 +48,65 @@ function createShipIcon(ship: ShipState, selected: boolean): L.DivIcon {
   })
 }
 
-// Inner component — manages markers imperatively (Leaflet is not React-idiomatic)
-function ShipLayer() {
-  const map          = useMap()
-  const ships        = useFleetStore(s => s.ships)
-  const selectedId   = useFleetStore(s => s.selectedShipId)
-  const setSelected  = useFleetStore(s => s.setSelectedShip)
-  const markersRef   = useRef<Map<string, L.Marker>>(new Map())
+export default function FleetMap() {
+  const [isMounted, setIsMounted] = useState(false)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const mapRef = useRef<L.Map | null>(null)
+  const markersRef = useRef<Map<string, L.Marker>>(new Map())
+  const ships = useFleetStore(s => s.ships)
+  const selectedId = useFleetStore(s => s.selectedShipId)
+  const setSelected = useFleetStore(s => s.setSelectedShip)
 
   useEffect(() => {
-    const currentIds = new Set(ships.map(s => s.id))
+    setIsMounted(true)
+  }, [])
 
-    // Remove markers for ships no longer in state
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || mapRef.current) return
+
+    // Guard against strict-mode and fast-refresh reusing a previously initialized DOM node.
+    if ((container as HTMLElement & { _leaflet_id?: number })._leaflet_id != null) {
+      delete (container as HTMLElement & { _leaflet_id?: number })._leaflet_id
+    }
+
+    const map = L.map(container, {
+      center: [26.0, 54.0],
+      zoom: 7,
+      zoomControl: true,
+    })
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+      maxZoom: 19,
+    }).addTo(map)
+
+    mapRef.current = map
+
+    return () => {
+      const currentMap = mapRef.current
+      if (!currentMap) return
+
+      for (const marker of markersRef.current.values()) {
+        marker.remove()
+      }
+      markersRef.current.clear()
+
+      const currentContainer = currentMap.getContainer() as HTMLElement & { _leaflet_id?: number }
+      currentMap.remove()
+      if (currentContainer._leaflet_id != null) {
+        delete currentContainer._leaflet_id
+      }
+      mapRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    const currentIds = new Set(ships.map(ship => ship.id))
+
     for (const [id, marker] of markersRef.current) {
       if (!currentIds.has(id)) {
         marker.remove()
@@ -68,10 +114,9 @@ function ShipLayer() {
       }
     }
 
-    // Update or create markers
     for (const ship of ships) {
       const existing = markersRef.current.get(ship.id)
-      const icon     = createShipIcon(ship, ship.id === selectedId)
+      const icon = createShipIcon(ship, ship.id === selectedId)
       const latlng: L.LatLngExpression = [ship.position.lat, ship.position.lng]
 
       if (existing) {
@@ -87,35 +132,15 @@ function ShipLayer() {
             Speed: ${ship.speed}kts
           </div>
         `, { permanent: false, direction: 'top' })
-        marker.on('click', () => setSelected(ship.id === selectedId ? null : ship.id))
+        marker.on('click', () => {
+          const currentSelected = useFleetStore.getState().selectedShipId
+          setSelected(currentSelected === ship.id ? null : ship.id)
+        })
         marker.addTo(map)
         markersRef.current.set(ship.id, marker)
       }
     }
-  }, [ships, selectedId, map, setSelected])
-
-  return null
-}
-
-export default function FleetMap() {
-  const [isMounted, setIsMounted] = useState(false)
-  const mapRef = useRef<L.Map | null>(null)
-
-  useEffect(() => {
-    setIsMounted(true)
-    return () => {
-      const map = mapRef.current
-      if (map) {
-        const container = map.getContainer() as HTMLElement & { _leaflet_id?: number }
-        map.remove()
-        // Ensure Leaflet container can be re-initialized after fast refresh.
-        if (container._leaflet_id != null) {
-          delete container._leaflet_id
-        }
-        mapRef.current = null
-      }
-    }
-  }, [])
+  }, [ships, selectedId, setSelected])
 
   if (!isMounted) {
     return (
@@ -127,23 +152,7 @@ export default function FleetMap() {
 
   return (
     <div className="h-full w-full relative bg-slate-900">
-      <MapContainer
-        key="hormuz-fleet-map-v1"
-        center={[26.0, 54.0]}
-        zoom={7}
-        style={{ height: '100%', width: '100%' }}
-        className="bg-slate-900"
-        whenCreated={(map) => {
-          mapRef.current = map
-        }}
-      >
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-          maxZoom={19}
-        />
-        <ShipLayer />
-      </MapContainer>
+      <div ref={containerRef} className="h-full w-full bg-slate-900" />
     </div>
   )
 }
