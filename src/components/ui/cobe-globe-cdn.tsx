@@ -211,14 +211,17 @@ export function GlobeCdn({
               style={{
                 position: "absolute",
                 left: 0,
-                top: 0,
+                top: -1,
                 width: lineLength,
-                height: 2,
-                background: "linear-gradient(90deg, rgba(248,113,113,0.95), rgba(248,113,113,0.2))",
-                boxShadow: "0 0 8px rgba(248,113,113,0.4)",
+                height: 3,
+                background:
+                  "linear-gradient(90deg, rgba(248,113,113,0.98) 0%, rgba(248,113,113,0.8) 35%, rgba(248,113,113,0.24) 100%)",
+                clipPath: "polygon(0 35%, 88% 35%, 100% 50%, 88% 65%, 0 65%)",
+                boxShadow:
+                  "0 0 10px rgba(248,113,113,0.45), 0 0 20px rgba(248,113,113,0.2), inset 0 0 3px rgba(255,255,255,0.35)",
                 transform: `rotate(${lineAngle}deg)`,
                 transformOrigin: "0 50%",
-                borderRadius: 999,
+                borderRadius: 2,
               }}
             />
             <div
