@@ -16,13 +16,15 @@ import type { FleetRecommendation } from '@/systems/advisor/advisor-types'
 import AIChatPanel from '@/components/command/ai-chat-panel'
 import AIStatusBar from '@/components/command/ai-status-bar'
 
+import { LiveAnalytics } from '@/components/command/analytics/live-analytics'
+
 type RightTab = 'ship' | 'alerts' | 'ai'
 
 // Leaflet must be loaded client-side only (no SSR)
-const FleetMap = dynamic(() => import('@/components/command/fleet-map'), {
+const TacticalMap = dynamic(() => import('@/components/command/tactical-map'), {
   ssr: false,
   loading: () => (
-    <div className="flex-1 bg-slate-950 flex items-center justify-center">
+    <div className="flex-1 bg-slate-100 flex items-center justify-center">
       <div className="text-slate-500 text-sm">Initializing tactical map...</div>
     </div>
   ),
@@ -155,7 +157,7 @@ export default function CommandDashboard() {
   const cdnMarkers = buildGlobeMarkers(liveShips)
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden select-none">
+    <div className="flex flex-col h-screen overflow-y-auto bg-slate-50 text-slate-100 scroll-smooth">
       
       <AIStatusBar onSelectTab={(tab) => {
         if (tab === 'SHIP') setRightTab('ship')
@@ -163,7 +165,7 @@ export default function CommandDashboard() {
         else if (tab === 'AI ADVISOR') setRightTab('ai')
       }} />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex h-[85vh] min-h-[600px] shrink-0 shadow-sm z-10 relative">
         {/* Left sidebar — ship list */}
         <div className="w-72 flex flex-col border-r border-slate-800 bg-slate-900">
         <div className="p-4 border-b border-slate-800">
@@ -203,7 +205,7 @@ export default function CommandDashboard() {
       {/* Main map */}
       <div className="flex-1 relative">
         <PlaybackToolbar />
-        <FleetMap />
+        <TacticalMap onShipSelect={(id) => useFleetStore.getState().setSelectedShip(id)} />
         {unackedAlerts.length > 0 && (
           <div className="absolute top-3 right-3 z-[1000] bg-red-600 text-white text-xs font-bold px-2 py-1 rounded">
             {unackedAlerts.length} ALERT{unackedAlerts.length > 1 ? 'S' : ''}
@@ -220,6 +222,10 @@ export default function CommandDashboard() {
         setTab={setRightTab}
       />
 
+      </div>
+
+      <div className="w-full bg-slate-50">
+        <LiveAnalytics />
       </div>
     </div>
   )
@@ -393,7 +399,7 @@ function RightPanel({
   )
 
   return (
-    <div className="w-80 flex flex-col border-l border-slate-800 bg-slate-900 overflow-hidden">
+    <div className="w-[400px] flex flex-col border-l border-slate-800 bg-slate-950 overflow-hidden shrink-0 z-10">
       {/* Tab bar */}
       <div className="flex flex-shrink-0 border-b border-slate-800 bg-slate-950/80">
         {tabBtn('ship',   'SHIP',    undefined)}
