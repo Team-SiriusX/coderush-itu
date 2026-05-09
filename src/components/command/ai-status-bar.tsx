@@ -45,14 +45,14 @@ export default function AIStatusBar({
           setPredictionsCount(data.length || 0)
         }
       } catch (e) {
-        // Fallback to local store
-        setPredictionsCount(alerts.filter((a) => (a.metadata as any)?.isPredictive).length)
+        // Fallback to local store if fetch fails
+        setPredictionsCount(useFleetStore.getState().alerts.filter((a) => (a.metadata as any)?.isPredictive).length)
       }
     }
     fetchPredictive()
     const id = setInterval(fetchPredictive, 30000)
     return () => clearInterval(id)
-  }, [alerts])
+  }, [])
 
   return (
     <div
