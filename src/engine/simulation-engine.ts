@@ -4,6 +4,9 @@ import { computeFuel } from './fuel-engine'
 import { computeStatus } from './status-engine'
 import { loadInitialFleet } from './fleet-loader'
 import { broadcastFleet, broadcastAlerts } from './realtime-broadcaster'
+import { routingEngine } from './routing/routing-engine'
+import { zoneEngine } from './routing/zone-engine'
+import db from '@/lib/db'
 
 /** Default tick interval in milliseconds */
 const DEFAULT_TICK_INTERVAL_MS = 1000
@@ -23,6 +26,13 @@ class SimulationEngine {
   private tickMs:     number = DEFAULT_TICK_INTERVAL_MS
   private running:    boolean = false
   private tickCount:  number = 0
+  private forceRecomputeRoutes: boolean = false
+
+  constructor() {
+    zoneEngine.onZonesChanged(() => {
+      this.forceRecomputeRoutes = true
+    })
+  }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -35,6 +45,20 @@ class SimulationEngine {
     this.tickMs  = tickIntervalMs
     this.ships   = new Map(loadInitialFleet().map((s) => [s.id, s]))
     this.running = true
+
+    // Load zones from DB and initialize routing
+    db.restrictedZone.findMany({ where: { active: true } }).then((zones) => {
+      const restrictedPolygons = zones.map(z => {
+        const geom = z.geometry as any
+        return {
+          id: z.id,
+          name: z.name,
+          ring: geom.coordinates as [number, number][]
+        }
+      })
+      routingEngine.init(restrictedPolygons)
+      this.forceRecomputeRoutes = true // initial compute
+    }).catch(e => console.error('[engine] Failed to load zones', e))
 
     console.log(`[engine] Starting simulation — ${this.ships.size} ships, tick ${tickIntervalMs}ms`)
 
@@ -73,6 +97,8 @@ class SimulationEngine {
       allAlerts.push(...updated.alerts)
     }
 
+    this.forceRecomputeRoutes = false
+
     const ships = Array.from(this.ships.values())
 
     // Broadcast fleet state + alerts in parallel (non-blocking to next tick)
@@ -90,8 +116,59 @@ class SimulationEngine {
   // ── Per-ship processing ───────────────────────────────────────────────────
 
   private processShip(ship: EngineShip): { ship: EngineShip; alerts: PendingAlert[] } {
+    const alerts: PendingAlert[] = []
+    let currentShip = { ...ship }
+
+    // Check Geofence breach (inside zone)
+    const isInsideZone = routingEngine.isInsideZone(currentShip.position)
+    if (isInsideZone && currentShip.status !== 'REROUTING' && currentShip.status !== 'STRANDED') {
+      currentShip.status = 'REROUTING'
+      alerts.push({
+        shipId: currentShip.id,
+        type: 'DISTRESS_SIGNAL', // Geofence breach
+        severity: 'CRITICAL',
+        message: `GEOFENCE BREACH: ${currentShip.name} is currently inside a restricted zone!`
+      })
+      // Force recompute to find escape path
+      currentShip.route = null 
+    }
+
+    // Check if route is invalid
+    let needsRecompute = this.forceRecomputeRoutes || !currentShip.route
+    if (!needsRecompute && currentShip.route) {
+      const remainingWaypoints = currentShip.route.waypoints.slice(currentShip.route.currentIdx)
+      if (routingEngine.isRouteInvalid(remainingWaypoints)) {
+        needsRecompute = true
+      }
+    }
+
+    // Recompute route if needed
+    if (needsRecompute && currentShip.status !== 'STRANDED' && currentShip.status !== 'STOPPED' && currentShip.status !== 'ARRIVED' && currentShip.status !== 'OUT_OF_FUEL') {
+      const result = routingEngine.computeRoute(currentShip.position, currentShip.destinationPos)
+      if (result.success) {
+        currentShip.route = { waypoints: result.path.waypoints, currentIdx: 0 }
+        if (currentShip.status === 'REROUTING' && !isInsideZone) {
+          // If we successfully rerouted and are not inside a zone, we can optionally restore status
+          // Or wait for directives, but let's assume successful reroute keeps normal.
+          currentShip.status = 'NORMAL'
+          currentShip.speed = currentShip.baseSpeed
+        }
+      } else {
+        // Stranded logic
+        currentShip.status = 'STRANDED'
+        currentShip.speed = 0
+        currentShip.route = null
+        alerts.push({
+          shipId: currentShip.id,
+          type: 'DISTRESS_SIGNAL',
+          severity: 'CRITICAL',
+          message: `STRANDED: ${currentShip.name} cannot find a valid route. Reason: ${result.reason}`
+        })
+      }
+    }
+
     // 1. Physics — advance position, heading, route
-    const movement = computeMovement(ship, this.tickMs)
+    const movement = computeMovement(currentShip, this.tickMs)
 
     // 2. Fuel — burn based on distance travelled
     const fuel = computeFuel(
@@ -108,25 +185,25 @@ class SimulationEngine {
       movement.arrived,
     )
 
-    // 4. Speed adjustment for out-of-fuel ships
-    const speed = status === 'OUT_OF_FUEL' ? 0 : ship.speed
+    // 4. Speed adjustment for out-of-fuel or stranded ships
+    const speed = (status === 'OUT_OF_FUEL' || status === 'STRANDED') ? 0 : currentShip.speed
 
     const updatedShip: EngineShip = {
-      ...ship,
-      previousPosition:   ship.position,   // snapshot for client interpolation
+      ...currentShip,
+      previousPosition:   currentShip.position,   // snapshot for client interpolation
       position:           movement.newPosition,
       heading:            movement.newHeading,
       speed,
       fuelRemaining:      fuel.remaining,
       status,
       route:              movement.updatedRoute,
-      arrivedAt:          movement.arrived && !ship.arrivedAt ? Date.now() : ship.arrivedAt,
+      arrivedAt:          movement.arrived && !currentShip.arrivedAt ? Date.now() : currentShip.arrivedAt,
       lowFuelAlertSent,
       outOfFuelAlertSent,
       lastUpdated:        Date.now(),
     }
 
-    return { ship: updatedShip, alerts: pendingAlerts }
+    return { ship: updatedShip, alerts: [...alerts, ...pendingAlerts] }
   }
 
   // ── External mutation (called by API route handlers) ─────────────────────
@@ -150,13 +227,11 @@ class SimulationEngine {
 
       case 'REROUTE':
       case 'DIVERT':
-        // Mark for rerouting — in a full implementation, new waypoints would be injected here
-        updated = { ...ship, status: 'REROUTING', speed: Math.max(6, ship.baseSpeed * 0.6) }
+        updated = { ...ship, status: 'REROUTING', speed: Math.max(6, ship.baseSpeed * 0.6), route: null }
         break
 
       case 'RETURN_TO_PORT':
-        // Resume normal speed, status back to normal (destination unchanged)
-        updated = { ...ship, status: 'NORMAL', speed: ship.baseSpeed }
+        updated = { ...ship, status: 'NORMAL', speed: ship.baseSpeed, route: null }
         break
 
       default:

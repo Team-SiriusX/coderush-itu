@@ -3,8 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import 'leaflet-draw/dist/leaflet.draw.css'
+import 'leaflet-draw'
 import { useFleetStore } from '@/stores/fleet-store'
 import type { ShipState } from '@/types/fleet'
+import { getPusherClient } from '@/lib/pusher-client'
 
 // Fix Leaflet default marker icon paths (Next.js build issue)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -53,6 +56,7 @@ export default function FleetMap() {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<L.Map | null>(null)
   const markersRef = useRef<Map<string, L.Marker>>(new Map())
+  const zonesLayerRef = useRef<L.FeatureGroup | null>(null)
   const ships = useFleetStore(s => s.ships)
   const selectedId = useFleetStore(s => s.selectedShipId)
   const setSelected = useFleetStore(s => s.setSelectedShip)
@@ -81,9 +85,94 @@ export default function FleetMap() {
       maxZoom: 19,
     }).addTo(map)
 
+    const drawnItems = new L.FeatureGroup()
+    map.addLayer(drawnItems)
+    zonesLayerRef.current = drawnItems
+
+    const drawControl = new L.Control.Draw({
+      edit: {
+        featureGroup: drawnItems,
+      },
+      draw: {
+        polygon: {
+          shapeOptions: { color: '#ef4444', weight: 2 },
+        },
+        polyline: false,
+        rectangle: false,
+        circle: false,
+        marker: false,
+        circlemarker: false,
+      },
+    })
+    map.addControl(drawControl)
+
+    map.on(L.Draw.Event.CREATED, async (event: any) => {
+      const layer = event.layer
+      drawnItems.addLayer(layer)
+
+      // Send to backend
+      const geojson = layer.toGeoJSON()
+      try {
+        const res = await fetch('/api/zones', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: `Zone ${Math.floor(Math.random() * 1000)}`,
+            geometry: geojson.geometry
+          })
+        })
+        const data = await res.json()
+        // Attach ID to layer for deletion later
+        ;(layer as any).zoneId = data.id
+      } catch (err) {
+        console.error('Failed to create zone', err)
+      }
+    })
+
+    map.on(L.Draw.Event.DELETED, async (event: any) => {
+      const layers = event.layers
+      layers.eachLayer(async (layer: any) => {
+        if (layer.zoneId) {
+          try {
+            await fetch(`/api/zones/${layer.zoneId}`, { method: 'DELETE' })
+          } catch (err) {
+            console.error('Failed to delete zone', err)
+          }
+        }
+      })
+    })
+
     mapRef.current = map
 
+    // Fetch initial zones
+    fetch('/api/zones')
+      .then(r => r.json())
+      .then(zones => {
+        zones.forEach((z: any) => {
+          const latlngs = z.geometry.coordinates[0].map((c: number[]) => [c[1], c[0]])
+          const polygon = L.polygon(latlngs, { color: '#ef4444' })
+          ;(polygon as any).zoneId = z.id
+          drawnItems.addLayer(polygon)
+        })
+      })
+
+    // Setup Pusher for zones updates
+    const pusherClient = getPusherClient()
+    const channel = pusherClient.subscribe('zones')
+    channel.bind('zone:update', (zones: any[]) => {
+      drawnItems.clearLayers()
+      zones.forEach(z => {
+        const latlngs = z.geometry.coordinates[0].map((c: number[]) => [c[1], c[0]])
+        const polygon = L.polygon(latlngs, { color: '#ef4444' })
+        ;(polygon as any).zoneId = z.id
+        drawnItems.addLayer(polygon)
+      })
+    })
+
     return () => {
+      channel.unbind_all()
+      pusherClient.unsubscribe('zones')
+
       const currentMap = mapRef.current
       if (!currentMap) return
 
