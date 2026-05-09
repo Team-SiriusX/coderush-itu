@@ -45,22 +45,24 @@ export default function CommandDashboard() {
             <ShipListItem key={ship.id} ship={ship} selected={ship.id === selectedShipId} />
           ))}
         </div>
-        <div className="p-4 border-t border-slate-800 bg-slate-950 flex flex-col items-center justify-center">
-          <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest w-full text-center mb-2">Global Tracking</div>
-          <div className="w-full max-w-[200px]">
-            <GlobeLive 
-              markers={ships.filter(s => s.status !== 'arrived').map(s => ({ 
-                id: s.id, 
-                location: [s.position.lat, s.position.lng] 
-              }))} 
-            />
-          </div>
-        </div>
       </div>
 
       {/* Main map */}
       <div className="flex-1 relative">
         <FleetMap />
+
+        {/* Global Tracking Mini-Map Overlay */}
+        <div className="absolute top-4 left-4 z-[1000] flex flex-col items-center pointer-events-none">
+          <div className="text-[10px] font-bold text-slate-800 bg-white/90 px-2 py-0.5 rounded uppercase tracking-widest shadow-md backdrop-blur-sm mb-2 pointer-events-auto">Global View</div>
+          <div className="w-48 h-48 rounded-full border-[3px] border-slate-800 shadow-[0_0_20px_rgba(0,0,0,0.5)] bg-slate-900 overflow-hidden pointer-events-auto">
+            <GlobeLive 
+              markers={ships.filter(s => s.status !== 'arrived').map(s => ({ 
+                id: s.id, 
+                location: [s.position.lat, s.position.lng],
+              }))} 
+            />
+          </div>
+        </div>
 
         {/* Alert badge */}
         {unackedAlerts.length > 0 && (

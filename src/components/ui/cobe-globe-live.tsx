@@ -6,6 +6,8 @@ import createGlobe from "cobe"
 interface LiveMarker {
   id: string
   location: [number, number]
+  name?: string
+  status?: string
 }
 
 interface GlobeLiveProps {
@@ -34,14 +36,7 @@ export function GlobeLive({
   const phiOffsetRef = useRef(0)
   const thetaOffsetRef = useRef(0)
   const isPausedRef = useRef(false)
-  const [liveViewers, setLiveViewers] = useState(2847)
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLiveViewers((v) => Math.max(100, v + Math.floor(Math.random() * 21) - 8))
-    }, 400)
-    return () => clearInterval(interval)
-  }, [])
+  const currentPhiRef = useRef(1.0)
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     pointerInteracting.current = { x: e.clientX, y: e.clientY }
@@ -77,13 +72,10 @@ export function GlobeLive({
     }
   }, [handlePointerUp])
 
-  const currentPhiRef = useRef(1.0) // Start looking near Middle East (approx phi)
-
   useEffect(() => {
     if (!canvasRef.current) return
     const canvas = canvasRef.current
     let globe: ReturnType<typeof createGlobe> | null = null
-    let animationId: number
 
     function init() {
       const width = canvas.offsetWidth
@@ -94,24 +86,21 @@ export function GlobeLive({
         width, height: width,
         phi: currentPhiRef.current, theta: 0.2, dark: 0, diffuse: 1.2,
         mapSamples: 16000, mapBrightness: 8,
-        baseColor: [0.9, 0.9, 0.9], // Light globe
-        markerColor: [1, 0, 0],     // Bright red tracking dots
+        baseColor: [0.9, 0.9, 0.9], 
+        markerColor: [1, 0, 0],     
         glowColor: [0.8, 0.8, 0.8],
         markerElevation: 0.05,
         markers: markers.map((m) => ({ location: m.location, size: 0.05, id: m.id })),
         arcs: [], arcColor: [1, 0, 0],
         arcWidth: 0.5, arcHeight: 0.25, opacity: 0.8,
+        // @ts-expect-error onRender is missing from cobe's TypeScript definitions
+        onRender: (state: Record<string, any>) => {
+          if (!isPausedRef.current) currentPhiRef.current += speed
+          state.phi = currentPhiRef.current + phiOffsetRef.current + dragOffset.current.phi
+          state.theta = 0.2 + thetaOffsetRef.current + dragOffset.current.theta
+        }
       })
-      function animate() {
-        if (!isPausedRef.current) currentPhiRef.current += speed
-        globe!.update({
-          phi: currentPhiRef.current + phiOffsetRef.current + dragOffset.current.phi,
-          theta: 0.2 + thetaOffsetRef.current + dragOffset.current.theta,
-        })
-        animationId = requestAnimationFrame(animate)
-      }
-      animate()
-      setTimeout(() => canvas && (canvas.style.opacity = "1"))
+      setTimeout(() => canvas && (canvas.style.opacity = "1"), 100)
     }
 
     if (canvas.offsetWidth > 0) {
@@ -127,19 +116,12 @@ export function GlobeLive({
     }
 
     return () => {
-      if (animationId) cancelAnimationFrame(animationId)
       if (globe) globe.destroy()
     }
   }, [markers, speed])
 
   return (
-    <div className={`relative aspect-square select-none ${className}`}>
-      <style>{`
-        @keyframes live-pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.6; }
-        }
-      `}</style>
+    <div className={`relative aspect-square select-none rounded-full overflow-hidden ${className}`}>
       <canvas
         ref={canvasRef}
         onPointerDown={handlePointerDown}
@@ -148,49 +130,6 @@ export function GlobeLive({
           transition: "opacity 1.2s ease", borderRadius: "50%", touchAction: "none",
         }}
       />
-      {markers.map((m, i) => (
-        <div
-          key={m.id}
-          style={{
-            position: "absolute",
-            // @ts-expect-error CSS Anchor Positioning
-            positionAnchor: `--cobe-${m.id}`,
-            bottom: "anchor(top)",
-            left: "anchor(center)",
-            translate: "-50% 0",
-            marginBottom: 8,
-            display: "flex",
-            alignItems: "center",
-            gap: "0.4rem",
-            padding: "0.35rem 0.6rem",
-            background: "linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)",
-            borderRadius: 4,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
-            pointerEvents: "none" as const,
-            whiteSpace: "nowrap" as const,
-            opacity: `var(--cobe-visible-${m.id}, 0)`,
-            filter: `blur(calc((1 - var(--cobe-visible-${m.id}, 0)) * 8px))`,
-            transition: "opacity 0.4s, filter 0.4s",
-          }}
-        >
-          <span style={{
-            width: 8, height: 8, background: "#ff3b30", borderRadius: "50%",
-            boxShadow: "0 0 8px #ff3b30",
-            animation: "live-pulse 1.5s ease-in-out infinite",
-          }} />
-          <span style={{
-            fontFamily: "monospace", fontSize: "0.6rem", fontWeight: 600,
-            letterSpacing: "0.1em", color: "#ff3b30", textTransform: "uppercase" as const,
-          }}>LIVE</span>
-          <span style={{
-            fontFamily: "system-ui, sans-serif", fontSize: "0.6rem",
-            color: "rgba(255,255,255,0.7)", paddingLeft: "0.4rem",
-            borderLeft: "1px solid rgba(255,255,255,0.2)",
-          }}>
-            {Math.floor(liveViewers * (0.3 + 0.7 * Math.pow(0.6, i))).toLocaleString()} watching
-          </span>
-        </div>
-      ))}
     </div>
   )
 }

@@ -98,6 +98,12 @@ export default function SignInPage() {
             </Button>
           </form>
 
+          <div className='mt-4 space-y-1 rounded border border-slate-700 bg-slate-800 p-3 text-xs text-slate-400'>
+            <div className='font-semibold text-slate-300'>Demo credentials</div>
+            <div>Command: command@hormuz.ops / command123</div>
+            <div>Captain: captain@hormuz.ops / captain123</div>
+          </div>
+
           <p className='mt-4 text-sm text-muted-foreground'>
             Don&apos;t have an account?{' '}
             <Link className='text-primary underline' href='/auth/sign-up'>

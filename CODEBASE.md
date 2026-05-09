@@ -8,9 +8,48 @@
 - Auth: Better Auth (JWT cookie cache) + Prisma adapter, Next.js auth handler
 - Data: Prisma schema for PostgreSQL, migrations tracked in prisma/migrations
 - Realtime + state: Pusher, Zustand
-- Maps + geo: Leaflet, React Leaflet, Turf.js
+- Maps + geo: Leaflet (imperative lifecycle), Turf.js
 - LLM tooling: OpenRouter SDK, LangChain
 - Containers: Docker (web + engine) with Postgres
+
+## Implemented So Far (2026-05-09)
+- Added Command Center route at `/command` with three-pane dashboard layout:
+  left ship list, center tactical map, right selected-ship/alerts panel.
+- Added command UI modules:
+  `src/components/command/command-dashboard.tsx`,
+  `src/components/command/fleet-map.tsx`,
+  `src/components/command/ship-sidebar.tsx`,
+  `src/components/command/alert-panel.tsx`.
+- Added realtime fleet synchronization hook:
+  `src/hooks/use-fleet-sync.ts` subscribing to Pusher channels (`fleet`, `alerts`, `zones`) and updating Zustand store.
+- Added tactical map rendering with custom SVG ship markers, status color coding, heading rotation, tooltip metadata, and click-to-select behavior.
+- Implemented strict-mode-safe Leaflet lifecycle in `fleet-map.tsx`:
+  removed `react-leaflet` `MapContainer` usage from this feature and switched to direct `L.map(...)` initialization with idempotent teardown (`map.remove()`, marker cleanup, and `_leaflet_id` reset) to prevent `Map container is already initialized` runtime errors in Next.js 16 dev/fast-refresh.
+- Added stale-closure-safe marker click handling by reading current selection from `useFleetStore.getState()` at click time.
+- Added global live globe overlay in Command Dashboard using `GlobeLive` with active ship markers.
+- Role-based routing: COMMAND -> /command, CAPTAIN -> /captain.
+- Captain dashboard implemented with real-time fuel gauge, status, position, and incoming directives.
+- Captain dashboard subscribes to `captain-{shipId}` Pusher channel for directives.
+- Distress signal textarea posts to `/api/distress`.
+- Seed flow added for demo users:
+  `command@hormuz.ops` (COMMAND) and `captain@hormuz.ops` (CAPTAIN, MV-7).
+
+## AGENT_CONTEXT
+### What Was Implemented
+- Role-based routing: COMMAND -> /command, CAPTAIN -> /captain
+- Captain dashboard: real-time fuel gauge, status, position, incoming directives
+- Captain subscribes to captain-{shipId} Pusher channel for directives
+- Distress signal textarea -> POST /api/distress (AI extraction in next prompt)
+- Seed script: command@hormuz.ops (COMMAND) + captain@hormuz.ops (CAPTAIN, MV-7)
+
+### Files Added
+- prisma/seed.ts
+- src/app/captain/page.tsx
+- src/components/captain/captain-dashboard.tsx
+
+### Files Modified
+- src/app/page.tsx - role-based redirect
+- src/app/auth/sign-in/page.tsx - demo credentials hint
 
 ## Scripts (package.json)
 - dev: next dev

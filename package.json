@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "engine": "tsx docker/engine/src/index.ts",
+    "seed": "tsx prisma/seed.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
