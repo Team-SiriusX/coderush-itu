@@ -1,9 +1,11 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useFleetSync } from '@/hooks/use-fleet-sync'
 import { useFleetStore } from '@/stores/fleet-store'
+import { authClient } from '@/lib/auth-client'
 import AlertPanel from '@/components/command/alert-panel'
 import ShipSidebar from '@/components/command/ship-sidebar'
 import { GlobeCdn } from '@/components/ui/cobe-globe-cdn'
@@ -29,7 +31,13 @@ const FleetMap = dynamic(() => import('@/components/command/fleet-map'), {
 })
 
 export default function CommandDashboard() {
+  const router = useRouter();
   useFleetSync()  // subscribes to Pusher, syncs Zustand store
+
+  const handleLogout = async () => {
+    await authClient.signOut();
+    router.push('/auth/sign-in');
+  };
 
   const liveShipsRaw = useFleetStore(s => s.ships)
   const alerts = useFleetStore(s => s.alerts)
@@ -166,13 +174,21 @@ export default function CommandDashboard() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar — ship list */}
         <div className="w-72 flex flex-col border-r border-slate-800 bg-slate-900">
-        <div className="p-4 border-b border-slate-800">
-          <div className="text-xs font-semibold text-slate-300 uppercase tracking-[0.16em]">
-            Hormuz Command
+        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+          <div>
+            <div className="text-xs font-semibold text-slate-300 uppercase tracking-[0.16em]">
+              Hormuz Command
+            </div>
+            <div className="text-xs text-slate-500 mt-1">
+              {liveShips.length} / 15 active contacts
+            </div>
           </div>
-          <div className="text-xs text-slate-500 mt-1">
-            {liveShips.length} / 15 active contacts
-          </div>
+          <button
+            onClick={handleLogout}
+            className='rounded bg-slate-800 px-2 py-1.5 text-xs font-semibold text-slate-100 hover:bg-slate-700'
+          >
+            Logout
+          </button>
         </div>
 
         <div className="p-4 border-b border-slate-800 bg-slate-950/60">

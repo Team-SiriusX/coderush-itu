@@ -1,8 +1,10 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useFleetSync } from '@/hooks/use-fleet-sync';
 import { getPusherClient } from '@/lib/pusher-client';
 import { useFleetStore } from '@/stores/fleet-store';
+import { authClient } from '@/lib/auth-client';
 import { useEffect, useState } from 'react';
 
 const PORTS: Record<string, string> = {
@@ -26,6 +28,7 @@ type Directive = {
 };
 
 export default function CaptainDashboard({ shipId }: { shipId: string }) {
+  const router = useRouter();
   useFleetSync();
 
   const ships = useFleetStore((s) => s.ships);
@@ -68,6 +71,11 @@ export default function CaptainDashboard({ shipId }: { shipId: string }) {
     setTimeout(() => setDistressSent(false), 3000);
   };
 
+  const handleLogout = async () => {
+    await authClient.signOut();
+    router.push('/auth/sign-in');
+  };
+
   if (!ship) {
     return (
       <div className='flex h-screen items-center justify-center bg-slate-950 text-sm text-slate-400'>
@@ -82,12 +90,20 @@ export default function CaptainDashboard({ shipId }: { shipId: string }) {
 
   return (
     <div className='mx-auto min-h-screen max-w-lg bg-slate-950 p-4 text-slate-100'>
-      <div className='mb-6'>
-        <div className='mb-1 text-xs uppercase tracking-widest text-slate-500'>Captain View</div>
-        <div className='text-2xl font-bold text-slate-100'>{ship.name}</div>
-        <div className='text-xs text-slate-500'>
-          {ship.id} - {ship.cargo}
+      <div className='mb-6 flex items-start justify-between'>
+        <div>
+          <div className='mb-1 text-xs uppercase tracking-widest text-slate-500'>Captain View</div>
+          <div className='text-2xl font-bold text-slate-100'>{ship.name}</div>
+          <div className='text-xs text-slate-500'>
+            {ship.id} - {ship.cargo}
+          </div>
         </div>
+        <button
+          onClick={handleLogout}
+          className='rounded bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-700'
+        >
+          Logout
+        </button>
       </div>
 
       <div
