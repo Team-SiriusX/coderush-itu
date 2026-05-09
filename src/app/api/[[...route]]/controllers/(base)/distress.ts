@@ -17,13 +17,16 @@ distress.post('/', async (c) => {
   const extraction: DistressExtractionResult = await extractDistress(message, shipId)
 
   // ── Persist distress record ────────────────────────────────────────────────
+  // Serialise via JSON roundtrip so Prisma accepts it as InputJsonValue
+  const extractionJson = JSON.parse(JSON.stringify(extraction)) as Record<string, unknown>
+
   const distressRecord = await db.distressMessage.create({
     data: {
       id:         createId(),
       shipId,
       rawMessage: message,
-      // Store full structured extraction as metadata blob
-      extraction: extraction as unknown as Record<string, unknown>,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      extraction: extractionJson as any,
     },
   })
 
@@ -46,8 +49,8 @@ distress.post('/', async (c) => {
       severity: extraction.severity,
       shipId,
       message:  alertMessage,
-      // Persist full extraction in metadata so the UI can render the AI Assessment card
-      metadata: extraction as unknown as Record<string, unknown>,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      metadata: extractionJson as any,
     },
   })
 
