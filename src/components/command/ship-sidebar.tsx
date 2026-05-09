@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useFleetStore } from '@/stores/fleet-store'
-import type { ShipState } from '@/types/fleet'
+import type { ShipState, DistressExtraction } from '@/types/fleet'
 import * as turf from '@turf/turf'
 
 const PORTS: Record<string, string> = {
@@ -19,9 +19,21 @@ const PORTS: Record<string, string> = {
 }
 
 export default function ShipSidebar({ ship }: { ship: ShipState }) {
-  const setSelected = useFleetStore(s => s.setSelectedShip)
-  const fuelPct     = Math.min(100, Math.round((ship.fuelRemaining / 8500) * 100))
-  const fuelColor   = fuelPct > 40 ? 'bg-primary shadow-[0_0_8px_#00ff66]' : fuelPct > 20 ? 'bg-yellow-400' : 'bg-red-500 shadow-[0_0_8px_#ef4444]'
+  const setSelected  = useFleetStore((s) => s.setSelectedShip)
+  const allAlerts    = useFleetStore((s) => s.alerts)
+  const fuelPct      = Math.min(100, Math.round((ship.fuelRemaining / 8500) * 100))
+  const fuelColor    = fuelPct > 40 ? 'bg-primary shadow-[0_0_8px_#00ff66]' : fuelPct > 20 ? 'bg-yellow-400' : 'bg-red-500 shadow-[0_0_8px_#ef4444]'
+
+  // Derive latest AI distress extraction for this ship (if distressed)
+  const latestDistressAI: DistressExtraction | null = ship.status === 'distressed'
+    ? (() => {
+        const da   = allAlerts.find((a) => a.shipId === ship.id && a.type === 'DISTRESS_SIGNAL' && !!a.metadata)
+        const meta = da?.metadata as Record<string, unknown> | undefined
+        return meta && typeof meta.situation === 'string'
+          ? (meta as unknown as DistressExtraction)
+          : null
+      })()
+    : null
 
   // Calculate ETA
   let routeDist = 0
@@ -93,6 +105,11 @@ export default function ShipSidebar({ ship }: { ship: ShipState }) {
         </div>
       </div>
 
+      {/* AI Directive Suggestion — distress ships only */}
+      {latestDistressAI && (
+        <DistressAISuggestion shipId={ship.id} extraction={latestDistressAI} />
+      )}
+
       {/* Directive buttons */}
       <div className="p-4 border-t border-primary/20 mt-auto space-y-2 bg-primary/5">
         <div className="text-[10px] font-heading font-semibold text-muted-foreground mb-3 tracking-widest uppercase opacity-70">
@@ -154,5 +171,106 @@ function DirectiveButton({
     >
       {sent ? '✓ SENT' : labels[type]}
     </button>
+  )
+}
+
+// ─── AI Directive Suggestion ─────────────────────────────────────────────────
+
+const ASSISTANCE_TO_DIRECTIVE: Record<
+  DistressExtraction['assistanceRequired'],
+  'HOLD' | 'REROUTE' | 'DIVERT' | 'RETURN_TO_PORT'
+> = {
+  NONE:       'HOLD',
+  MEDICAL:    'DIVERT',
+  TOWING:     'DIVERT',
+  ESCORT:     'REROUTE',
+  FUEL:       'DIVERT',
+  EVACUATION: 'RETURN_TO_PORT',
+}
+
+function DistressAISuggestion({
+  shipId,
+  extraction,
+}: {
+  shipId:     string
+  extraction: DistressExtraction
+}) {
+  const [sent, setSent] = useState(false)
+  const directive = ASSISTANCE_TO_DIRECTIVE[extraction.assistanceRequired] ?? 'HOLD'
+
+  const issueDirective = async () => {
+    setSent(true)
+    await fetch('/api/directives', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        shipId,
+        type:       directive,
+        payload:    { reason: 'AI_DISTRESS_RECOMMENDATION', source: extraction.assistanceRequired },
+        issuedById: 'hormuz-ai',
+      }),
+    })
+  }
+
+  return (
+    <div className="mx-4 mb-3 rounded border border-red-500/40 bg-red-950/20 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-red-500/20 bg-red-900/10">
+        <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+        <span className="text-[10px] font-bold tracking-[0.15em] text-red-400 uppercase">
+          HORMUZ-AI Recommendation
+        </span>
+      </div>
+
+      <div className="p-3 space-y-2.5">
+        {/* Situation */}
+        <p className="text-[11px] text-slate-300 leading-relaxed">
+          {extraction.situation}
+        </p>
+
+        {/* Systems affected */}
+        {extraction.systemsAffected.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {extraction.systemsAffected.map((sys) => (
+              <span
+                key={sys}
+                className="px-1.5 py-0.5 rounded bg-red-900/40 border border-red-700/40
+                  text-red-300 text-[9px] font-mono uppercase"
+              >
+                {sys}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Casualties */}
+        {extraction.casualtyCount > 0 && (
+          <div className="text-[10px] font-mono font-bold text-red-400 animate-pulse">
+            ⚠ CASUALTIES REPORTED: {extraction.casualtyCount}
+          </div>
+        )}
+
+        {/* Recommended action */}
+        <div className="rounded bg-red-950/40 border border-red-800/30 px-2.5 py-2 text-[10px] text-red-200 leading-relaxed">
+          <span className="text-red-500 font-bold">ACTION: </span>
+          {extraction.recommendedAction}
+        </div>
+
+        {/* Pre-populated directive button */}
+        <button
+          onClick={() => void issueDirective()}
+          disabled={sent}
+          className="w-full py-2 px-3 rounded border text-[10px] font-mono font-bold
+            tracking-widest uppercase transition-all active:scale-95
+            border-red-600/50 bg-red-900/20 text-red-400
+            hover:bg-red-800/40 hover:border-red-500
+            disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {sent
+            ? `✓ ${directive.replace(/_/g, ' ')} ISSUED`
+            : `Issue ${directive.replace(/_/g, ' ')} · AI Rec`}
+        </button>
+      </div>
+    </div>
   )
 }

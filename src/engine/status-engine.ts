@@ -62,7 +62,7 @@ export function computeStatus(
   const fuelPct = fuelRemaining / ship.fuelCapacity
   if (fuelPct < LOW_FUEL_THRESHOLD_PCT && !lowFuelAlertSent) {
     // Check if ship can make it on remaining fuel
-    const rangePct    = estimatedRangeNm(fuelRemaining, ship.speed, ship.weatherPenalty)
+    const rangePct    = estimatedRangeNm(fuelRemaining, ship.speed, ship.weatherSeverity ?? 'LOW')
     const distToDest  = distanceNm(ship.position, ship.destinationPos)
     const willMakeIt  = rangePct >= distToDest
 

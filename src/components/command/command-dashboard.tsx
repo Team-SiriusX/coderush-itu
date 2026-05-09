@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useFleetSync } from '@/hooks/use-fleet-sync'
 import { useFleetStore } from '@/stores/fleet-store'
@@ -13,6 +13,7 @@ import { findFrameAt } from '@/systems/playback/playback-engine'
 import { PlaybackRecorder } from '@/systems/playback/playback-recorder'
 import { ProximityEngine } from '@/systems/proximity/proximity-engine'
 import type { FleetRecommendation } from '@/systems/advisor/advisor-types'
+import AIChatPanel from '@/components/command/ai-chat-panel'
 
 // Leaflet must be loaded client-side only (no SSR)
 const FleetMap = dynamic(() => import('@/components/command/fleet-map'), {
@@ -199,42 +200,12 @@ export default function CommandDashboard() {
         )}
       </div>
 
-      {/* Right panel — ship analysis or alert log */}
-      <div className="w-80 flex flex-col border-l border-slate-800 bg-slate-900">
-        {selectedShip ? (
-          <ShipSidebar ship={selectedShip} />
-        ) : (
-          <div className="flex flex-col h-full overflow-y-auto">
-            <div className="flex-1">
-              <AlertPanel alerts={unackedAlerts} />
-            </div>
-            {recommendations.length > 0 && (
-              <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-                <div className="text-[10px] font-semibold text-cyan-400 mb-3 tracking-[0.16em] uppercase flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                  AI Fleet Advisor
-                </div>
-                <div className="space-y-3">
-                  {recommendations.map(r => (
-                    <div key={r.id} className="border border-cyan-900/50 bg-cyan-950/20 p-3 rounded text-sm">
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="font-mono font-bold text-cyan-300 text-[11px]">{r.shipId}</span>
-                        <span className="font-mono text-cyan-500 text-[9px]">{r.confidenceScore}% CONF</span>
-                      </div>
-                      <div className="text-slate-200 text-xs leading-relaxed mb-2 font-medium">
-                        {r.rationale}
-                      </div>
-                      <div className="text-[10px] text-cyan-400/80 uppercase tracking-wide">
-                        ACTION: {r.type.replace(/_/g, ' ')}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      {/* Right panel — tabbed: Ship / Alerts / AI Advisor */}
+      <RightPanel
+        selectedShip={selectedShip}
+        unackedAlerts={unackedAlerts}
+        recommendations={recommendations}
+      />
 
     </div>
   )
@@ -367,5 +338,99 @@ function ShipListItem({ ship, selected }: { ship: import('@/types/fleet').ShipSt
         </div>
       </div>
     </button>
+  )
+}
+
+// ─── Tabbed right panel ───────────────────────────────────────────────────────
+
+type RightTab = 'ship' | 'alerts' | 'ai'
+
+function RightPanel({
+  selectedShip,
+  unackedAlerts,
+  recommendations,
+}: {
+  selectedShip: import('@/types/fleet').ShipState | null
+  unackedAlerts: import('@/types/fleet').FleetAlert[]
+  recommendations: FleetRecommendation[]
+}) {
+  const [tab, setTab] = useState<RightTab>(selectedShip ? 'ship' : 'alerts')
+
+  // Auto-switch to ship tab when a ship is selected
+  useEffect(() => {
+    if (selectedShip) setTab('ship')
+  }, [selectedShip?.id])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const tabBtn = (id: RightTab, label: string, badge?: number) => (
+    <button
+      onClick={() => setTab(id)}
+      className={`flex-1 py-2 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border-b-2
+        ${tab === id
+          ? 'border-cyan-400 text-cyan-400 bg-slate-900'
+          : 'border-transparent text-slate-500 hover:text-slate-300 bg-slate-950/60'}`}
+    >
+      {label}
+      {badge != null && badge > 0 && (
+        <span className="ml-1 px-1 py-0.5 rounded-full bg-red-600 text-[8px] text-white font-bold align-middle">
+          {badge}
+        </span>
+      )}
+    </button>
+  )
+
+  return (
+    <div className="w-80 flex flex-col border-l border-slate-800 bg-slate-900 overflow-hidden">
+      {/* Tab bar */}
+      <div className="flex flex-shrink-0 border-b border-slate-800 bg-slate-950/80">
+        {tabBtn('ship',   'SHIP',    undefined)}
+        {tabBtn('alerts', 'ALERTS',  unackedAlerts.length || undefined)}
+        {tabBtn('ai',     'AI ADVISOR', undefined)}
+      </div>
+
+      {/* Panel content */}
+      <div className="flex-1 overflow-hidden">
+        {tab === 'ship' && (
+          selectedShip
+            ? <ShipSidebar ship={selectedShip} />
+            : (
+              <div className="flex h-full items-center justify-center text-slate-600 text-xs tracking-wide">
+                Select a vessel on the map
+              </div>
+            )
+        )}
+
+        {tab === 'alerts' && (
+          <div className="flex flex-col h-full overflow-y-auto">
+            <div className="flex-1">
+              <AlertPanel alerts={unackedAlerts} />
+            </div>
+            {recommendations.length > 0 && (
+              <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex-shrink-0">
+                <div className="text-[10px] font-semibold text-cyan-400 mb-3 tracking-[0.16em] uppercase flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                  System Recommendations
+                </div>
+                <div className="space-y-3">
+                  {recommendations.map(r => (
+                    <div key={r.id} className="border border-cyan-900/50 bg-cyan-950/20 p-3 rounded">
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="font-mono font-bold text-cyan-300 text-[11px]">{r.shipId}</span>
+                        <span className="font-mono text-cyan-500 text-[9px]">{r.confidenceScore}% CONF</span>
+                      </div>
+                      <div className="text-slate-200 text-xs leading-relaxed mb-2">{r.rationale}</div>
+                      <div className="text-[10px] text-cyan-400/80 uppercase tracking-wide">
+                        ▸ {r.type.replace(/_/g, ' ')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'ai' && <AIChatPanel />}
+      </div>
+    </div>
   )
 }

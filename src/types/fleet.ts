@@ -24,6 +24,7 @@ export type ShipState = {
   status: ShipStatus
   route: RoutePoint[]
   weatherPenalty: boolean
+  weatherSeverity?: 'LOW' | 'MODERATE' | 'SEVERE' | 'EXTREME'
   lastUpdated: number
 }
 
@@ -78,13 +79,16 @@ export type Directive = {
   createdAt: number
 }
 
+/** Matches DistressExtractionResult from distress-chain.ts */
 export type DistressExtraction = {
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-  issue: string
-  injuries: number
-  systemsAffected: string[]
-  urgencyScore: number
-  recommendedAction: string
+  severity:               'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+  situation:              string
+  systemsAffected:        string[]
+  casualtyCount:          number
+  assistanceRequired:     'NONE' | 'MEDICAL' | 'TOWING' | 'ESCORT' | 'FUEL' | 'EVACUATION'
+  canContinue:            boolean
+  estimatedTimeToFailure: number | null
+  recommendedAction:      string
 }
 
 export type PlaybackFrame = {
