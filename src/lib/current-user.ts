@@ -1,5 +1,6 @@
 import { getCookieCache } from 'better-auth/cookies';
 import { headers } from 'next/headers';
+import db from './db';
 
 /**
  * Retrieves the current authenticated user from the session
@@ -15,9 +16,19 @@ export async function currentUser() {
 
     if (!data?.user) return null;
 
-    const user = data.user;
+    const dbUser = await db.user.findUnique({
+      where: { id: data.user.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        image: true,
+        role: true,
+        assignedShipId: true,
+      },
+    });
 
-    return user;
+    return dbUser;
   } catch (error) {
     console.error('Failed to get current user:', error);
     return null;

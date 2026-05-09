@@ -2,7 +2,6 @@ import { getCookieCache } from 'better-auth/cookies';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   authRoutes,
-  DEFAULT_LOGIN_REDIRECT,
   publicRoutes,
   SIGN_IN_PAGE_PATH,
 } from './routes';
@@ -25,9 +24,7 @@ export async function proxy(request: NextRequest) {
   if (isApiRoute) return NextResponse.next();
 
   if (isAuthRoute) {
-    if (isAuthenticated) {
-      return NextResponse.redirect(new URL(DEFAULT_LOGIN_REDIRECT, request.url));
-    }
+    // Avoid auth bounce loops; page-level logic handles post-login redirects.
     return NextResponse.next();
   }
 
