@@ -21,7 +21,7 @@ const STATUS_COLORS: Record<string, string> = {
 function createShipIcon(ship: ShipState) {
   const color = STATUS_COLORS[ship.status.toLowerCase()] ?? '#6b7280'
   const size = 16
-  const isDistressed = ship.status === 'DISTRESS' || ship.status === 'distressed'
+  const isDistressed = ship.status === 'distressed'
   const animationClass = isDistressed ? 'animate-pulse' : ''
   const border = isDistressed ? `stroke="#fff" stroke-width="2"` : ''
 
@@ -238,12 +238,12 @@ export default function TacticalMap({ onShipSelect }: { onShipSelect: (id: strin
           let dashArray = '5 5'
           let className = ''
 
-          if (ship.status === 'REROUTING' || ship.status === 'rerouting') {
+          if (ship.status === 'rerouting') {
             color = '#f59e0b'
             weight = 2
             opacity = 0.8
             dashArray = ''
-          } else if (ship.status === 'DISTRESS' || ship.status === 'distressed') {
+          } else if (ship.status === 'distressed') {
             color = '#ef4444'
             weight = 2.5
             opacity = 0.8
