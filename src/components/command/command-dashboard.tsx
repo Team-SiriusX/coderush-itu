@@ -14,6 +14,9 @@ import { PlaybackRecorder } from '@/systems/playback/playback-recorder'
 import { ProximityEngine } from '@/systems/proximity/proximity-engine'
 import type { FleetRecommendation } from '@/systems/advisor/advisor-types'
 import AIChatPanel from '@/components/command/ai-chat-panel'
+import AIStatusBar from '@/components/command/ai-status-bar'
+
+type RightTab = 'ship' | 'alerts' | 'ai'
 
 // Leaflet must be loaded client-side only (no SSR)
 const FleetMap = dynamic(() => import('@/components/command/fleet-map'), {
@@ -47,6 +50,7 @@ export default function CommandDashboard() {
   const proximityRef = useRef(new ProximityEngine())
 
   const [recommendations, setRecommendations] = useState<FleetRecommendation[]>([])
+  const [rightTab, setRightTab] = useState<RightTab>('alerts')
 
   useEffect(() => {
     const fetchRecs = async () => {
@@ -151,10 +155,17 @@ export default function CommandDashboard() {
   const cdnMarkers = buildGlobeMarkers(liveShips)
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden select-none">
+    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden select-none">
+      
+      <AIStatusBar onSelectTab={(tab) => {
+        if (tab === 'SHIP') setRightTab('ship')
+        else if (tab === 'ALERTS') setRightTab('alerts')
+        else if (tab === 'AI ADVISOR') setRightTab('ai')
+      }} />
 
-      {/* Left sidebar — ship list */}
-      <div className="w-72 flex flex-col border-r border-slate-800 bg-slate-900">
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left sidebar — ship list */}
+        <div className="w-72 flex flex-col border-r border-slate-800 bg-slate-900">
         <div className="p-4 border-b border-slate-800">
           <div className="text-xs font-semibold text-slate-300 uppercase tracking-[0.16em]">
             Hormuz Command
@@ -205,8 +216,11 @@ export default function CommandDashboard() {
         selectedShip={selectedShip}
         unackedAlerts={unackedAlerts}
         recommendations={recommendations}
+        tab={rightTab}
+        setTab={setRightTab}
       />
 
+      </div>
     </div>
   )
 }
@@ -343,19 +357,19 @@ function ShipListItem({ ship, selected }: { ship: import('@/types/fleet').ShipSt
 
 // ─── Tabbed right panel ───────────────────────────────────────────────────────
 
-type RightTab = 'ship' | 'alerts' | 'ai'
-
 function RightPanel({
   selectedShip,
   unackedAlerts,
   recommendations,
+  tab,
+  setTab,
 }: {
   selectedShip: import('@/types/fleet').ShipState | null
   unackedAlerts: import('@/types/fleet').FleetAlert[]
   recommendations: FleetRecommendation[]
+  tab: RightTab
+  setTab: (t: RightTab) => void
 }) {
-  const [tab, setTab] = useState<RightTab>(selectedShip ? 'ship' : 'alerts')
-
   // Auto-switch to ship tab when a ship is selected
   useEffect(() => {
     if (selectedShip) setTab('ship')

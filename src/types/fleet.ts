@@ -91,6 +91,15 @@ export type DistressExtraction = {
   recommendedAction:      string
 }
 
+export type PredictiveAlertMetadata = {
+  isPredictive: true
+  riskType: string
+  confidence: number
+  timeToEventMinutes: number
+  reasoning: string
+  suggestedAction: string
+}
+
 export type PlaybackFrame = {
   timestamp: number
   ships: ShipState[]

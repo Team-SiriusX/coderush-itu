@@ -4,6 +4,7 @@
  * Turbopack hot-reload using the singleton inside simulationEngine.
  */
 import { simulationEngine } from './simulation-engine'
+import { runPredictiveAgent } from '@/lib/langchain/predictive-agent'
 
 const BOOT_KEY = '__hormuz_engine_booted__'
 
@@ -27,4 +28,7 @@ export function bootstrapEngine(): void {
   console.log('[bootstrap] Starting HORMUZ fleet simulation engine...')
   simulationEngine.start(1000)
   console.log('[bootstrap] Engine started — 15 ships active at 1Hz')
+
+  // Start LangChain predictive agent
+  setInterval(() => void runPredictiveAgent(), 60_000)
 }
