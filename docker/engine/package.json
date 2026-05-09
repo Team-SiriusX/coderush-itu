@@ -1,0 +1,13 @@
+{
+  "name": "hormuz-engine",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@paralleldrive/cuid2": "^2.2.2",
+    "@prisma/client": "^6.0.0",
+    "@turf/turf": "^7.1.0",
+    "pusher": "^5.2.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

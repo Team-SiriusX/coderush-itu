@@ -1,5 +1,5 @@
-export const SOCKET_EVENTS = {
-  // Server → Client
+export const REALTIME_EVENTS = {
+  // Server -> Client
   FLEET_UPDATE: 'fleet:update',
   ALERT_NEW: 'alert:new',
   ALERT_UPDATE: 'alert:update',
@@ -8,11 +8,11 @@ export const SOCKET_EVENTS = {
   ZONE_UPDATE: 'zone:update',
   PLAYBACK_FRAME: 'playback:frame',
 
-  // Client → Server
+  // Client -> Server
   ZONE_CREATE: 'zone:create',
   ZONE_DELETE: 'zone:delete',
   DIRECTIVE_SEND: 'directive:send',
   CAPTAIN_ACCEPT: 'captain:accept',
   CAPTAIN_DISTRESS: 'captain:distress',
   PLAYBACK_SCRUB: 'playback:scrub',
-} as const
+} as const;
