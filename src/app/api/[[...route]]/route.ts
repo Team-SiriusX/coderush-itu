@@ -1,8 +1,11 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { handle } from 'hono/vercel';
+import directivesController from './controllers/directives';
 
 const app = new Hono().basePath('/api');
+
+app.route('/directives', directivesController);
 
 app.onError((err, c) => {
   console.log(err);

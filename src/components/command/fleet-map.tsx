@@ -19,13 +19,13 @@ if (typeof window !== 'undefined') {
 
 // Status color map
 const STATUS_COLORS: Record<string, string> = {
-  normal:            '#10b981',
-  rerouting:         '#facc15',
-  distressed:        '#f97316',
-  stopped:           '#ef4444',
-  stranded:          '#dc2626',
-  insufficient_fuel: '#fb923c',
-  arrived:           '#64748b',
+  normal:            '#00ff66', // Neon Green
+  rerouting:         '#facc15', // Yellow
+  distressed:        '#f97316', // Orange
+  stopped:           '#ef4444', // Red
+  stranded:          '#dc2626', // Deep Red
+  insufficient_fuel: '#fb923c', // Orange-ish
+  arrived:           '#3b4a42', // Muted dark green
 }
 
 // Create SVG ship icon with heading rotation
@@ -125,13 +125,13 @@ export default function FleetMap() {
       } else {
         const marker = L.marker(latlng, { icon })
         marker.bindTooltip(`
-          <div style="font-size:11px;line-height:1.4">
-            <strong>${ship.name}</strong><br/>
-            ${ship.status.toUpperCase()}<br/>
-            Fuel: ${Math.round(ship.fuelRemaining)}t<br/>
-            Speed: ${ship.speed}kts
+          <div style="font-family: var(--font-rajdhani); font-size:11px; line-height:1.4; background: #0b0f14; color: #d6ffe6; border: 1px solid rgba(0, 255, 102, 0.3); padding: 6px; border-radius: 4px;">
+            <strong style="font-family: var(--font-orbitron); letter-spacing: 0.05em; color: #00ff66; text-shadow: 0 0 4px #00ff66;">${ship.name}</strong><br/>
+            <span style="font-family: var(--font-mono); font-size: 9px; opacity: 0.7;">STATUS :: ${ship.status.toUpperCase()}</span><br/>
+            <span style="font-family: var(--font-mono); font-size: 9px; opacity: 0.7;">FUEL_REM :: ${Math.round(ship.fuelRemaining)}T</span><br/>
+            <span style="font-family: var(--font-mono); font-size: 9px; opacity: 0.7;">VELOCITY :: ${ship.speed}KTS</span>
           </div>
-        `, { permanent: false, direction: 'top' })
+        `, { permanent: false, direction: 'top', className: 'tactical-tooltip' })
         marker.on('click', () => {
           const currentSelected = useFleetStore.getState().selectedShipId
           setSelected(currentSelected === ship.id ? null : ship.id)
@@ -145,7 +145,7 @@ export default function FleetMap() {
   if (!isMounted) {
     return (
       <div className="h-full w-full bg-slate-900 flex items-center justify-center">
-        <div className="text-slate-500 text-sm italic">Initializing tactical map...</div>
+        <div className="text-slate-500 text-sm italic font-sans">Initializing tactical map...</div>
       </div>
     )
   }

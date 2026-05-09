@@ -1,19 +1,25 @@
 import Providers from '@/components/providers';
 import { cn } from '@/lib/utils';
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono, Inter } from 'next/font/google';
+import { Orbitron, Rajdhani, Share_Tech_Mono } from 'next/font/google';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
-
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
+const orbitron = Orbitron({ 
+  subsets: ['latin'], 
+  variable: '--font-orbitron',
+  weight: ['400', '500', '600', '700', '800', '900']
 });
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+const rajdhani = Rajdhani({
   subsets: ['latin'],
+  variable: '--font-rajdhani',
+  weight: ['300', '400', '500', '600', '700']
+});
+
+const shareTechMono = Share_Tech_Mono({
+  subsets: ['latin'],
+  variable: '--font-share-tech-mono',
+  weight: ['400']
 });
 
 export const metadata: Metadata = {
@@ -32,10 +38,10 @@ export default function RootLayout({
       className={cn(
         'h-full',
         'antialiased',
-        geistSans.variable,
-        geistMono.variable,
+        orbitron.variable,
+        rajdhani.variable,
+        shareTechMono.variable,
         'font-sans',
-        inter.variable,
       )}
     >
       <body className='min-h-full flex flex-col'>
