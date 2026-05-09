@@ -41,6 +41,7 @@ function FleetStatusDonut() {
                 paddingAngle={2}
                 dataKey="value"
                 stroke="none"
+                isAnimationActive={false}
               >
                 {data.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -121,6 +122,7 @@ function AlertVolumeChart() {
                 strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#alertGradient)"
+                isAnimationActive={false}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -173,7 +175,7 @@ function FuelLevelsChart() {
                 tick={{ fill: '#64748b' }}
               />
               <ChartTooltip cursor={{ fill: 'transparent' }} content={<ChartTooltipContent />} />
-              <Bar dataKey="fuel" radius={[0, 4, 4, 0]}>
+              <Bar dataKey="fuel" radius={[0, 4, 4, 0]} isAnimationActive={false}>
                 {data.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />
                 ))}
