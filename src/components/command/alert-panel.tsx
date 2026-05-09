@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useFleetStore } from '@/stores/fleet-store'
-import type { FleetAlert, DistressExtraction } from '@/types/fleet'
+import type { FleetAlert, DistressExtraction, PredictiveAlertMetadata } from '@/types/fleet'
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -35,6 +35,12 @@ const ASSISTANCE_ICON: Record<string, string> = {
 function asDistressExtraction(meta: Record<string, unknown> | undefined): DistressExtraction | null {
   if (!meta || typeof meta.situation !== 'string') return null
   return meta as unknown as DistressExtraction
+}
+
+/** Safely cast alert metadata to PredictiveAlertMetadata */
+function asPredictiveAlert(meta: Record<string, unknown> | undefined): PredictiveAlertMetadata | null {
+  if (!meta || meta.isPredictive !== true) return null
+  return meta as unknown as PredictiveAlertMetadata
 }
 
 // Infer a directive type from assistanceRequired
@@ -99,21 +105,38 @@ function AlertCard({ alert, onAck }: { alert: FleetAlert; onAck: () => void }) {
     ? asDistressExtraction(alert.metadata)
     : null
 
+  const predictive = asPredictiveAlert(alert.metadata)
+
   return (
     <div className={`rounded border text-[11px] transition-all hover:bg-white/5 overflow-hidden
-      ${SEVERITY_STYLES[alert.severity] ?? SEVERITY_STYLES.LOW}`}>
+      ${SEVERITY_STYLES[alert.severity] ?? SEVERITY_STYLES.LOW}
+      ${predictive ? 'border-primary shadow-[0_0_8px_rgba(0,255,255,0.3)] animate-[pulse_2s_ease-in-out_infinite]' : ''}`}>
 
       {/* Standard header row */}
       <div className="p-3 pb-2">
         <div className="flex items-start justify-between gap-1 mb-1.5">
-          <div className="font-heading font-bold tracking-wider uppercase text-[10px]">
-            {alert.type.replace(/_/g, ' ')}
+          <div className="flex items-center gap-2">
+            <div className="font-heading font-bold tracking-wider uppercase text-[10px]">
+              {alert.type.replace(/_/g, ' ')}
+            </div>
+            {predictive && (
+              <span className="bg-primary/20 text-primary border border-primary/50 text-[8px] font-mono font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+                🧠 PREDICTIVE
+              </span>
+            )}
           </div>
           <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${SEVERITY_BADGE[alert.severity] ?? ''}`}>
             {alert.severity}
           </span>
         </div>
         <div className="font-sans opacity-90 leading-relaxed">{alert.message}</div>
+        
+        {predictive && (
+          <div className="mt-2 text-[10px] text-primary/80 font-mono">
+            <div className="mb-1"><strong>REASON:</strong> {predictive.reasoning}</div>
+            <div className="opacity-70"><strong>ACTION:</strong> {predictive.suggestedAction}</div>
+          </div>
+        )}
       </div>
 
       {/* AI Assessment — distress only */}

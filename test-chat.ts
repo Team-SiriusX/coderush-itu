@@ -1,6 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai'
+import 'dotenv/config'
 
-export const fleetLLM = new ChatOpenAI({
+const fleetLLM = new ChatOpenAI({
   modelName: 'google/gemini-2.5-flash',
   temperature: 0.3,
   maxTokens: 800,
@@ -14,3 +15,18 @@ export const fleetLLM = new ChatOpenAI({
     },
   },
 })
+
+async function test() {
+  console.log("Calling OpenRouter...")
+  try {
+    const stream = await fleetLLM.stream("Hello, testing stream!")
+    for await (const chunk of stream) {
+      process.stdout.write(chunk.content.toString())
+    }
+    console.log("\nDone!")
+  } catch (err) {
+    console.error("Error:", err)
+  }
+}
+
+test()
